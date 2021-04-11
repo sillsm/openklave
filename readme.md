@@ -55,6 +55,7 @@ We assume you have installed:
 Here's what it should look like once you have the ST-Link/V2 plugged in to the MPK2. Note that this requires 2 usb connections to work. So you'll have the ST-LINK/v2 connected to the JTAG port and plugged into your computer's USB, and you'll have a second USB connection to the back of the keyboard, to power and send messages to it, like you would usually.
 
 <p align="center">
+  
   <img width="460" height="300" src="/pics/debugger-setup.jpg">
 </p>
 
