@@ -21,6 +21,12 @@ to advance this purpose.
 
 If you receive any notifications from any party to the contrary, let us know in the Github Issues. 
 
+## Required background-knowledge and tools
+
+This document assumes almost no knowledge except a little python. The goal is to learn everything by playing and experimentation, diving deeper and deeper each iteration by trying to accomplish progressively more difficult tasks.
+
+The two essential tools are a) an ST-LINK/V2 debugger, which you can get for $30 on Amazon (link below), and a b) screw driver to open the keyboard up.
+
 ## Diving in
 
 A whole lot of modification can be achieved just by sending sysex commands to the MPK2 device, for example by using rtmidi to send midi messages from your laptop to the device.
@@ -59,4 +65,44 @@ Here's what it should look like once you have the ST-Link/V2 plugged in to the M
   <img width="460" height="300" src="/pics/debugger-setup.jpg">
 </p>
 
+### Warm-up exercise: entering debug mode on the keyboard.
 
+Let's verify everything is properly connected. Open up a few terminal windows. In one, you will run OpenOCD to launch a GDB server.
+
+```
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg
+```
+
+If everything is working properly you should see something like
+```
+...
+Info : STLINK V2J29S7 (API v2) VID:PID 0483:3748
+Info : Target voltage: 3.217323
+Info : stm32f1x.cpu: hardware has 6 breakpoints, 4 watchpoints
+Info : starting gdb server for stm32f1x.cpu on 3333
+Info : Listening on port 3333 for gdb connections
+...
+```
+
+Now, in a second terminal, start gdb and connect to this local server.
+
+```
+gdb
+
+(in gdb)
+target remote localhost:3333
+```
+which should display
+```
+Remote debugging using localhost:3333
+```
+
+#### Your first GDB lesson
+
+1. Press CTRL-C to stop the keyboard executing its current program, and enter debug mode.
+2. Enter 'c' to continue execution. PC means 'program counter'. It is the current instruction that is executing.
+3. Enter 'stepi' to step forward one instruction on the keyboard.
+4. Reset the keyboard by entering 'monitor reset halt'. You will need to enter c to start it running like normal.
+
+#### Task: Demonstrate you can put your MPK249 in debug mode. 
+It should look like this.
