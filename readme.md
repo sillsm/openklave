@@ -26,4 +26,6 @@ If you receive any notifications from any party to the contrary, let us know in 
 A whole lot of modification can be achieved just by sending sysex commands to the MPK2 device, for example by using rtmidi to send midi messages from your laptop to the device.
 Doing this, you can change the colors on the keypads, and even intercept and modify midi messages between the device and your software.
 
+### Investigating the firmware
+
 
