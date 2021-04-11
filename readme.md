@@ -105,7 +105,7 @@ Remote debugging using localhost:3333
 4. Reset the keyboard by entering 'monitor reset halt'. You will need to enter c to start it running like normal.
 
 #### Task: Demonstrate you can put your MPK249 in debug mode. 
-If you did everything right and sucessfully connected gdb to the MPK2, the unit will display cool debug stripes in the light pads indicating the keyboard is in debug mode.
+If you did everything right and sucessfully connected gdb to the MPK2, the unit will display cool debug stripes in the light pads indicating the keyboard is in debug mode. Notice how the MPK249 debug mode alters the pad colors between columns of blue and green.
 
 <p align="center">
   <img width="460" height="300" src="/pics/debugstripes.jpg">
