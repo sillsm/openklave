@@ -110,3 +110,5 @@ If you did everything right and sucessfully connected gdb to the MPK2, the unit 
 <p align="center">
   <img width="460" height="300" src="/pics/debugstripes.jpg">
 </p>
+
+When tinkering with the keyboard, it is more comfortable to adjust the plastic hood mostly back over the keys, so you can play notes and test things out as you debug.
