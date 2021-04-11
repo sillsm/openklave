@@ -113,5 +113,18 @@ If you did everything right and sucessfully connected gdb to the MPK2, the unit 
 
 When tinkering with the keyboard, it is more comfortable to adjust the plastic hood mostly back over the keys, so you can play notes and test things out as you debug.
 
-### Task: Understand the memory layout of the STM32F103 and rip the MPK2 firmware.
+### Task: Understand the memory layout of the STM32F103 and rip the MPK2 firmware to your computer.
+
+Review the memory layout of the STM32.
+<p align="center">
+  <img width="460" height="300" src="https://i.stack.imgur.com/ugTmg.png">
+</p>
+
+Memory addresses are represented in hexidecimal, so each digit goes 1 to 9, then A, B, C, D, E, F.
+
+There are two pieces of software running on the device, the bootloader, and the operating system. 
+The bootloader is located from memory address 0x0 to 0x6000, and it is mirrored at 0x08000000 to 0x08006000.
+
+How much software is that? Let's review hexidecimal 0x6000 means no single digits, no 16s, no 256s, and 6 
+
 
