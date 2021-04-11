@@ -26,6 +26,8 @@ If you receive any notifications from any party to the contrary, let us know in 
 A whole lot of modification can be achieved just by sending sysex commands to the MPK2 device, for example by using rtmidi to send midi messages from your laptop to the device.
 Doing this, you can change the colors on the keypads, and even intercept and modify midi messages between the device and your software.
 
+But our goal is to permit keyboard users to execute arbitrary code on the keyboard with only a USB cable. To do this, we're going to have to deeply investigate the guts of the keyboard and learn a lot about it.
+
 ### Investigating the firmware
 
 Unscrew the screws at the bottom of your keyboard, and investigate the primary printed circuit board. 
@@ -37,6 +39,10 @@ Unscrew the screws at the bottom of your keyboard, and investigate the primary p
 Notice two things. First, its brain is a microcontroller called an STM32F103. Second, it has a 16 pin JTAG connector so you can debug it.
 
 [You'll want to buy the $30 ST-Link/V2 debugger from Amazon.](https://www.amazon.com/ST-LINK-V2-circuit-debugger-programmer/dp/B00SDTEM1I/ref=sr_1_3?dchild=1&keywords=st-link%2Fv2+debugger&qid=1618172788&sr=8-3) This thing is essential. It will allow you to debug firmware on the STM32F103, set memory values, and even step through program execution instruction by instruction.
+
+#### A note on the STM32F103
+
+The STM32F103 runs an instruction called ARM Cortex M3. The chip is 32-bit and little-endian, which will be important for setting up Ghidra and sending values to it later.
 
 #### Accompanying software
 
