@@ -11,7 +11,7 @@ If the launch goal is reached and there's community interest, we will work towar
 
 ## Project purpose and copyright note
 
-This project was started because the MPK249 is a beautiful device, full of promise, with terrible software. It has fun light pads and nice-feeling keys.
+This project was started because the MPK249 is a beautiful device, full of promise, with terrible software, and almost no support from Akai. It has fun light pads and nice-feeling keys.
 But the MPK249 barely interacts with Ableton. One can fix many issues using sysex commands run from a laptop, but certain issues require modifying the system software.
 For example, one cannot currently write arbitrary messages to the LCD screen without completely freezing the system.
 
