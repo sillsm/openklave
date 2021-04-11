@@ -108,5 +108,5 @@ Remote debugging using localhost:3333
 If you did everything right and sucessfully connected gdb to the MPK2, the unit will display cool debug stripes in the light pads indicating the keyboard is in debug mode.
 
 <p align="center">
-  <img width="460" height="300" src="/pics/debuggerstripes.jpg">
+  <img width="460" height="300" src="/pics/debugstripes.jpg">
 </p>
