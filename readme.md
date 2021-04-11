@@ -136,5 +136,31 @@ The addressess typically run in sequences of 2 or 4 bytes. 2 byte sequences, lik
 
 It can be really hard to read through sequences of bytes to try to figure out which instructions are encoded, forget about whole functions. Decompilers like Ghidra or IDA load these byte sequences and display them in human-readable code so you can understand what is happening.
 
+The operating system is stored from 0x6000 to 0x33fff. That is 0x2DFFF bytes, or just about one fifth of a megabyte.
+
+### Ripping the firmware, the OS, and both.
+
+GDB can copy sectors of memory from your MPK2 to your local filesystem using the [dump command](https://stuff.mit.edu/afs/athena/project/rhel-doc/3/rhel-gdb-en-3/dump-restore-files.html).
+
+```
+ dump binary memory bootloader.bin 0 0x6000
+```
+ Will dump the bootloader to a bin file. Note you can also dump it to an ihex file format, which we'll discuss more later.
+ Make sure you keep this backup file in a safe place you never modify. 
+ I personally went through several chips before I learned to back up and restore firmware properly.
+ 
+ ```
+ dump binary memory mpk2os.bin 0x6000 0x33fff
+ ```
+ 
+ Let's be safe and also dump the os in the ihex format so we can reload it using the bootloader
+ 
+ ```
+ dump ihex memory mpk2os.ihex 0x6000 0x33fff
+ ```
+ 
+ 
+ 
+ 
 
 
