@@ -48,7 +48,7 @@ Notice two things. First, its brain is a microcontroller called an STM32F103. Se
 
 #### A note on the STM32F103
 
-The STM32F103 runs an instruction called ARM Cortex M3. The chip is 32-bit and little-endian, which will be important for setting up Ghidra and sending values to it later.
+The STM32F103 runs an instruction set called ARM Cortex M3. The chip is 32-bit and little-endian, which will be important for setting up Ghidra and sending values to it later.
 
 #### Accompanying software
 
@@ -57,6 +57,7 @@ We assume you have installed:
 1. Ghidra, for decompiling the system firmware and annotating it.
 2. OpenOCD, for connecting your laptop debugger to the microcontroller and setting up a gdb instance.
 3. GDB, for debugging.
+4. A python installation with rtmidi (pip install), so you can send midi and sysex messages to the keyboard.
 
 Here's what it should look like once you have the ST-Link/V2 plugged in to the MPK2. Note that this requires 2 usb connections to work. So you'll have the ST-LINK/v2 connected to the JTAG port and plugged into your computer's USB, and you'll have a second USB connection to the back of the keyboard, to power and send messages to it, like you would usually.
 
