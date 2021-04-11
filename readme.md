@@ -16,7 +16,7 @@ But the MPK249 barely interacts with Ableton. One can fix many issues using syse
 For example, one cannot currently write arbitrary messages to the LCD screen without completely freezing the system.
 
 This project does not copy or redistribute any copyright-protectible software from Akai or any other source. The MPK2 series has no encryption mechanism
-which prevents modificaiton. As device owners, it is our legal right to arbitrarily modify our devices without restriction, and to write and share original software
+which prevents modification. As device owners, it is our legal right to arbitrarily modify our devices without restriction, and to write and share original software
 to advance this purpose.
 
 If you receive any notifications from any party to the contrary, let us know in the Github Issues. 
