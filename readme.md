@@ -28,4 +28,28 @@ Doing this, you can change the colors on the keypads, and even intercept and mod
 
 ### Investigating the firmware
 
+Unscrew the screws at the bottom of your keyboard, and investigate the primary printed circuit board. 
+
+<p align="center">
+  <img width="460" height="300" src="/pics/mpk249pcb.jpg">
+</p>
+
+Notice two things. First, its brain is a microcontroller called an STM32F103. Second, it has a 16 pin JTAG connector so you can debug it.
+
+[You'll want to buy the $30 ST-Link/V2 debugger from Amazon.](https://www.amazon.com/ST-LINK-V2-circuit-debugger-programmer/dp/B00SDTEM1I/ref=sr_1_3?dchild=1&keywords=st-link%2Fv2+debugger&qid=1618172788&sr=8-3) This thing is essential. It will allow you to debug firmware on the STM32F103, set memory values, and even step through program execution instruction by instruction.
+
+#### Accompanying software
+
+We assume you have installed:
+
+1. Ghidra, for decompiling the system firmware and annotating it.
+2. OpenOCD, for connecting your laptop debugger to the microcontroller and setting up a gdb instance.
+3. GDB, for debugging.
+
+Here's what it should look like once you have the ST-Link/V2 plugged in to the MPK2. Note that this requires 2 usb connections to work. So you'll have the ST-LINK/v2 connected to the JTAG port and plugged into your computer's USB, and you'll have a second USB connection to the back of the keyboard, to power and send messages to it, like you would usually.
+
+<p align="center">
+  <img width="460" height="300" src="/pics/mpk249pcb.jpg">
+</p>
+
 
