@@ -112,3 +112,6 @@ If you did everything right and sucessfully connected gdb to the MPK2, the unit 
 </p>
 
 When tinkering with the keyboard, it is more comfortable to adjust the plastic hood mostly back over the keys, so you can play notes and test things out as you debug.
+
+### Task: Understand the memory layout of the STM32F103 and rip the MPK2 firmware.
+
