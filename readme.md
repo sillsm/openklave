@@ -159,7 +159,17 @@ GDB can copy sectors of memory from your MPK2 to your local filesystem using the
  dump ihex memory mpk2os.ihex 0x6000 0x33fff
  ```
  
+ ### Minimal rtmidi program to send sysex to wipe the OS
  
+ ```
+import rtmidi
+midiout = rtmidi.MidiOut()
+midiout.open_port(0)
+header = [0xF0, 0x47, 0x00, 0x24]
+footer = [0xF7]
+msg = [0x72, 0, 0] 
+midiout.send_message(header + message + footer)
+```
  
  
 
