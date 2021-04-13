@@ -162,7 +162,10 @@ dump ihex memory mpk2os.ihex 0x08006000 0x08033fff
 Now shockingly enough, this bare ihex dump is sufficient to completely restore the operating system if you bork it during development.
 The bootloader has a built-in recovery mode which receives ihex as a sysex message and rerwrites the flash over usb.
 
-Rename mpk2os.ihex to mpk2os.syx, and add the following hex bytes to the beginning of the file
+Rename mpk2os.ihex to mpk2os.syx, and add the following hex bytes to the beginning of the file. 
+
+#### Make sure you have a good hex editor handy
+https://hexed.it/ is excellent and it works in your browser.
 
 ```
 F0 47 00 24 70
@@ -201,6 +204,13 @@ If you're getting stuck at any parts, submit an issue and let us know.
 *Warning* Be extremely careful that you are backing up your firmware correctly before you attempt a wipe and replace.
 Read the dump instructions a few times, and make sure you enter them exactly.
 We will not be able to provide you a working copy of the operating system if something goes wrong, and you will have to contact Akai.
+
+*Hint*
+The first few bytes of the backed up OS should look like this:
+```
+0xF0, 0x47, 0x00, 0x24, 0x70, 0x3A, 0x30, 0x32, 0x30, 0x30, 0x30, 0x30,
+0x30, 0x34, 0x30, 0x38, 0x30, 0x30, 0x46, 0x32, 0x0D, 0x0A...
+```
  
  
 
