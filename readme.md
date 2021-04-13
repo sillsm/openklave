@@ -150,14 +150,31 @@ GDB can copy sectors of memory from your MPK2 to your local filesystem using the
  I personally went through several chips before I learned to back up and restore firmware properly.
  
  ```
- dump binary memory mpk2os.bin 0x6000 0x33fff
+ dump binary memory mpk2os.bin 0x08006000 0x08033fff
  ```
  
  Let's be safe and also dump the os in the ihex format so we can reload it using the bootloader
  
  ```
- dump ihex memory mpk2os.ihex 0x6000 0x33fff
+dump ihex memory mpk2os.ihex 0x08006000 0x08033fff
  ```
+
+Now shockingly enough, this bare ihex dump is sufficient to completely restore the operating system if you bork it during development.
+The bootloader has a built-in recovery mode which receives ihex as a sysex message and rerwrites the flash over usb.
+
+Rename mpk2os.ihex to mpk2os.syx, and add the following hex bytes to the beginning of the file
+
+```
+F0 47 00 24 70
+```
+
+and this byte to the end of the file
+
+```
+F7
+```
+
+And you can play mpk2os.syx to the system, for example by using software like Sysex Librarian, to restore it.
  
  ### Minimal rtmidi program to send sysex to wipe the OS
  
@@ -170,6 +187,20 @@ footer = [0xF7]
 msg = [0x72, 0, 0] 
 midiout.send_message(header + message + footer)
 ```
+
+### Task: Dump the OS, wipe the OS, play the dump back as sysex to restore the system.
+
+Dump the OS as instructed above into an ihex file.
+Make the modifications to the .syx file.
+Use rtmidi over usb to send a [0x72, 0, 0] wipe message.
+Play your dumped OS back to the system and restore it.
+
+Do not move on until you are able to complete this task, as it requires basic proficiency with sysex, rtmidi, and gdb.
+If you're getting stuck at any parts, submit an issue and let us know.
+
+*Warning* Be extremely careful that you are backing up your firmware correctly before you attempt a wipe and replace.
+Read the dump instructions a few times, and make sure you enter them exactly.
+We will not be able to provide you a working copy of the operating system if something goes wrong, and you will have to contact Akai.
  
  
 
