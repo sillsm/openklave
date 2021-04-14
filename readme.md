@@ -253,5 +253,9 @@ we find that a routine was run that converted the ihex message characters into t
 
 When the system is in reset mode, these words are further overwritten to 0x6000, suggesting that there's some memory map between these flash addresses and the operating system, or a routine that otherwise copies these addresses to the OS.
 
-
+It appears after much examination, that 0x08000f88 is the function that does the copying from the flash to the device. We notice 1) this function moves 0x1 to 0x40022010 (the flash controller on STM32f1) before it writes, and that it 
+```
+strh r6, [r5, #0]
+```
+where r6 is the half-word being written, and r5 holds the value 0x8006000 or similar.
 
