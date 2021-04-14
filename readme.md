@@ -259,3 +259,7 @@ strh r6, [r5, #0]
 ```
 where r6 is the half-word being written, and r5 holds the value 0x8006000 or similar.
 
+### How do presets work
+
+Presets stored with the [0x10] command are written to flash pages starting at 0x8034040
+
