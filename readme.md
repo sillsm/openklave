@@ -263,3 +263,9 @@ where r6 is the half-word being written, and r5 holds the value 0x8006000 or sim
 
 Presets stored with the [0x10] command are written to flash pages starting at 0x8034040
 
+## Ghidra Basics
+
+In this section we discuss analyzing the OS and bootloader you ripped from the device earlier, in Ghidra. We discuss memory maps and loaders to make debugging easier.
+
+Please refer to the [reference card](https://www.ic.unicamp.br/~ranido/mc404/docs/ARMv7-cheat-sheet.pdf) as you start to make your way through Arm M3 asesembly.
+
