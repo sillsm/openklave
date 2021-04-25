@@ -269,3 +269,31 @@ In this section we discuss analyzing the OS and bootloader you ripped from the d
 
 Please refer to the [reference card](https://www.ic.unicamp.br/~ranido/mc404/docs/ARMv7-cheat-sheet.pdf) as you start to make your way through Arm M3 asesembly.
 
+## Finding an exploit to inject arbitrary code
+
+A significant amount of time was spent looking for areas where the last element of the stack frame 
+could be overwritten to force the return to an arbitrary address.
+
+Here are some of the potential areas.
+
+### ldmia and stmia in loops
+
+[Start here.](https://medium.com/techmaker/stack-buffer-overflow-in-stm32-b73fa3f0bf23). There are a few ways to allocate stack. 
+One is looking for sub sp, add sp instructions at the start and end of a function.
+
+Observe the function in the OS defined at 0x0800e5d0:
+
+```
+        0800e5d0 00 b5           push       { lr }
+        0800e5d2 91 b0           sub        sp,#0x44
+	...
+        0800e5ec 11 b0           add        sp,#0x44
+```
+A stack 0x44 bytes long (68 bytes) is being allocated. The operations that take place between the elipses 
+will almost certainly write to the stack frame. If you can find a subroutine, for example a loop,
+that checks for a terminator, or uses some other means besides the stack size to determine
+how many times to allocate to the stack, there's a possibility of finding an exploit.
+
+
+
+
