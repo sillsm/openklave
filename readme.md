@@ -302,5 +302,15 @@ For example
 0x80061fe   subs        r2, r2, #1      (r2--)       
 0x8006200   bcs.n       0x80061f6       (loop to the top if r2 > 0)
 ```
+Here's a similar loop, but this one waits for a string terminator to stop copying between two addresses in RAM
 
+```
+0800626c 11 f8 01 2b     ldrb.w     r2,[r1],#0x1   (load value in address r1 into r2, increment by 1)
+08006270 00 f8 01 2b     strb.w     r2,[r0],#0x1   (store value in r2 into address in r0, increment by 1)
+08006274 00 2a           cmp        r2,#0x0        (Is r2 == 0?)
+08006276 f9 d1           bne        LAB_0800626c   (keep looping if r2 isn't 0)
+```
+Here, if there was a way to write an arbitrary length stream of data starting at r1, this routine
+could help us copy into the address at r0, possibly corrupting the stack frame and allowing 
+us to inject arbitrary code.
 
