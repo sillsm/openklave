@@ -314,3 +314,11 @@ Here, if there was a way to write an arbitrary length stream of data starting at
 could help us copy into the address at r0, possibly corrupting the stack frame and allowing 
 us to inject arbitrary code.
 
+Here's yet another variant of this pattern, this time using ldmia and stmia.
+```
+0x80061ea   ldmia       r1!, {r3}       (load value in address stored in r1 to r3, increment r1)                                                           
+0x80061ec   subs        r2, r2, #4      (r2 -= 4)                                                  
+0x80061ee   stmia       r0!, {r3}       (Take the value in r3 and store it at the address in r0, increment r0)                                                
+0x80061f0   cmp r2, #4                  (is r2 == 4 yet?)                                                        
+0x80061f2   bcs.n       0x80061ea       (if not, keep looping)
+```
