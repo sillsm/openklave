@@ -276,7 +276,7 @@ could be overwritten to force the return to an arbitrary address.
 
 Here are some of the potential areas.
 
-### ldmia and stmia in loops
+### ldrb and strb in loops
 
 [Start here.](https://medium.com/techmaker/stack-buffer-overflow-in-stm32-b73fa3f0bf23). There are a few ways to allocate stack. 
 One is looking for sub sp, add sp instructions at the start and end of a function.
@@ -294,6 +294,13 @@ will almost certainly write to the stack frame. If you can find a subroutine, fo
 that checks for a terminator, or uses some other means besides the stack size to determine
 how many times to allocate to the stack, there's a possibility of finding an exploit.
 
+For example
 
+```
+0x80061f6   ldrb.w      r3, [r1], #1    (load value in address r1 into r3, increment by 1)                                                        
+0x80061fa   strb.w      r3, [r0], #1    (store value in r3 into address r0, increment by 1)                                                      
+0x80061fe   subs        r2, r2, #1      (r2--)       
+0x8006200   bcs.n       0x80061f6       (loop to the top if r2 > 0)
+```
 
 
