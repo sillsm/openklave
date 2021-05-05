@@ -1,6 +1,7 @@
 The MIT License (MIT)
 
-Copyright (c) 2016 Artem Smotrakov
+Copyright (c) 2021 Max Sills
+Started from STM32 project template under MIT by Artem Smotrakov
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
