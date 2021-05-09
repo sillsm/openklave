@@ -322,3 +322,12 @@ Here's yet another variant of this pattern, this time using ldmia and stmia.
 0x80061f0   cmp r2, #4                  (is r2 == 4 yet?)                                                        
 0x80061f2   bcs.n       0x80061ea       (if not, keep looping)
 ```
+## Learning more about the display (to drive it)
+
+The LCD Display on the MPK249 is a Winstar model number
+WH2004a.
+
+<p align="center">
+  <img width="460" height="300" src="/pics/winstarback.jpg">
+</p>
+
