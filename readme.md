@@ -1,5 +1,7 @@
 # OpenKlave
 
+{:toc}
+
 ## Introduction
 
 OpenKlave is an open source operating system for the Akai MPK2 keyboard series, including the MPK 225, MPK249, and the MPK261.
