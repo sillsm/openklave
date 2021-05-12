@@ -346,10 +346,11 @@ the MPK249 PCB, and there are already dedicated connected to the LCD ribbon.
 </p>
 
 Thankfully, we can learn a lot from the text, and it matches our winstar LCD spec. Specifically, we see
-8 pins [D0-D7] for data
-LCD RW
-LCD RS
-LCD E(nable)
+* 8 pins [D0-D7] for data
+* LCD RW
+* LCD RS
+* LCD E(nable) and
+* LCD Contrast DC (which appears to be the voltage potentiometer to alter the screen contrast).
 
 and some other stuff that doesn't belong, like "Load LEDS". So this pinout is probably doing double duty.
 
