@@ -338,6 +338,9 @@ WH2004a.
 There are a couple of different ways to drive it, but our brand uses '6800 interface (ST7066 IC)'. We're going to have to 
 initialize it, send some clock pulses to it from our STM32, and come up with a loop to update the screen.
 
+[Here is the data sheet for the ST7066] (https://www.sparkfun.com/datasheets/LCD/st7066.pdf), which is pin compatible with the HD44780.
+
+
 We don't get to decide arbitrarily whether we'll use GPIO, IC2, or something else to drive the LCD. The STM32F103 is slotted into 
 the MPK249 PCB, and there are already dedicated connected to the LCD ribbon.
 
