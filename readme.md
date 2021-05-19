@@ -378,7 +378,10 @@ Critically, you need to watch (and set) two seperate things, the GPIO configurat
 The below 4 gdb instructions will show you config status (0x00) and data read (0x08) address values for GPIOB and GPIOC.
 Theoretically, if just GPIOB and GPIOC are driving the LCD, these four values are all we need to track over time to
 see how the LCD is being driven. Ideally, it will map to the ST7066 spec sheet linked above, and not some
-random nonsense reflecting hidden knowledge we can't obtain documentation over.
+random nonsense reflecting hidden knowledge we can't obtain public documentation for.
+
+Our operating system depends on using publicly documented and non-creative, obvious mechanisms
+to interface with peripherals like the screen or buttons.
 
 ```
 display/1xw 0x40010c08
@@ -387,8 +390,11 @@ display/1xw 0x40011008
 display/1xw 0x40011000
 ```
 Port B Config
+
 Port B Data
+
 Port C Config
+
 Port C Data
 
 Note also, the BSRR function just *overwrites* certain pin values, it 
