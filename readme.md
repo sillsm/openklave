@@ -359,5 +359,61 @@ and some other stuff that doesn't belong, like "Load LEDS". So this pinout is pr
 
 Now, the trick is to figure out which GPIO pins are mapped to which of the labelled outlets on the PCB.
 
+So we set some breakpoints in GDB when characters are being written to the screen and hopefully we can figure out what's going on.
+
+### Go understand how GPIO works before you read further.
+
+STM32F103 memory-maps its perpherials. Which means everything, clocks, output voltages driving LCDs, USB,
+is just another address.
+
+Here's a handy [cheatsheet](https://gist.github.com/iwalpola/6c36c9573fd322a268ce890a118571ca) on how GPIO works.
+
+Every GPIO 'port' (a-e) has 16 pins it drives, which are physical pieces of metal sticking out of the CPU
+which are wired via ribbon cable to the MPK2 device.
+
+Mostly, the pins are written via the 0x10 address extension (BSRR).
+
+Critically, you need to watch (and set) two seperate things, the GPIO configuration (is the pin input or output, what is its speed etc)., and the data coming out of the pin (0 or 1). 
+
+The below 4 gdb instructions will show you config status (0x00) and data read (0x08) address values for GPIOB and GPIOC.
+Theoretically, if just GPIOB and GPIOC are driving the LCD, these four values are all we need to track over time to
+see how the LCD is being driven. Ideally, it will map to the ST7066 spec sheet linked above, and not some
+random nonsense reflecting hidden knowledge we can't obtain documentation over.
+
+```
+display/1xw 0x40010c08
+display/1xw 0x40010c00
+display/1xw 0x40011008
+display/1xw 0x40011000
+```
+Port B Config
+Port B Data
+Port C Config
+Port C Data
+
+Note also, the BSRR function just *overwrites* certain pin values, it 
+does not change them all at once. So you really need to track GPIO values over time 
+to understand what's going on; it's not enough to see a given value is stored in a GPIO register
+that corresponds to BSRR, because you're missing the current values its amending, and the port's 
+current configuration.
+
+## We wrote some characters.
+
+It appears GPIOB0 and GPIOB1 are driving the R/S and R/W bits of the LCD,
+and that GPIOC0-GPIO-7 are driving the data bits. At this point this is 
+just a hypothesis.
+```
+0x40010c00 : 0x70000
+0x40010c00 : 0x1000
+0x40010c00 : 0x20000000
+0x40010c00 : 0x80000000
+0x40010c00 : 0x200000
+```
+And then the screen status changes.
+
+So breaking this down, what happened?
+
+
+
 
 
