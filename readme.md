@@ -630,5 +630,4 @@ Huh, ok. Two pins mention USB, GPIOA11 and GPIOA12. But that can't be write. USB
 
 Wow, no. We're going to be consulting [USBMadeSimple](https://www.usbmadesimple.co.uk/) a lot for this section. It's a great, simple tutorial on the entire USB protocol with many pictures.
 
-All USB cables only have two datapins, D+ and D-. 
-
+All USB cables only have two datapins, D+ and D-. According to our spec sheet, A11 is D- and A12 is D+. We also see from USBMadeSimple that the host (the computer) starts by making some calls two these pins. We'll need to intercept these calls, answer back, and then exchange data somehow.
