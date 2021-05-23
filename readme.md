@@ -507,3 +507,101 @@ So Pin B5 is flickering alot, by itself apparently. And its voltage
 seems to drive the potentiometer, somehow. We also see its configuration
 is in this new 'alternative function'. What is that?
 
+<p align="center">
+  <img width="460" height="300" src="/pics/LQFP100.png">
+</p>
+
+There's a pin diagram for our chip, a high density, LQFP, 100 pin STM32F103 C series.
+
+We see from the spec sheet that PIN B5 corresponds to TIM3, which is a clock ticky peripheral.
+
+At this point, we could go learn about that, but let's see how much we can get away with just 
+by reading TIM3 values in gdb! It's a memory-mapped peripheral system after all, and there should
+be no hidden variables. If TIM3 does stuff, let's see if we can learn just by watching it.
+
+Cool. So boot up the stock OS and go into the Contrast change mode.
+Let's spy on TIM3
+
+```
+display/32xw 0x40000400
+```
+When we start with the contrast value at 50
+```
+Contrast 50:
+TIM3
+                    0                 4              8               c
+0x40000400:	0x00000081	0x00000000	0x00000000	0x00000000
+0x40000410:	0x0000001f	0x00000000	0x00006800	0x00000000
+0x40000420:	0x00000010	[0x00000141]	0x00000000	0x000001df
+0x40000430:	0x00000000	0x00000000	0x00000155	0x00000000
+0x40000440:	0x00000000	0x00000000	0x00000000	0x00000081
+```
+where [] seems to go up and down as we stepi, 
+no matter what else is happening in the system.
+```
+Contrast 99:
+TIM3
+0x40000400:	0x00000081	0x00000000	0x00000000	0x00000000
+0x40000410:	0x0000001f	0x00000000	0x00006800	0x00000000
+0x40000420:	0x00000010	[0x000000df]	0x00000000	0x000001df
+0x40000430:	0x00000000	0x00000000	<0x000001de>	0x00000000
+0x40000440:	0x00000000	0x00000000	0x00000000	0x00000081
+```
+Where [] keep changing, and <> seems permanently changed, and associated
+with the changed contrast.
+
+Contrast 00: makes that <> value = 0x000000c8, but everything else behaves the same.
+
+Ok interesting. So some values are set in TIM3, one value seems to change directly
+with when we spin the contrast knob, and one value just ticks up and down in a circle
+regardless of what we do. Let's go check the address maps in Ghidra and see if we can make sense of
+it.
+Consulting the SVD file, w.r.t. TIM3 ->
+```
+40000400 = CR1, this is set to 0x81
+40000410 = SR , this is set to 0x1f
+40000418 = CCMR_Input1, this is set to 0x00006800
+40000420 = CCER, this is set to 0x10
+40000424 = CNTR (counter), this is going all over the place, even during debug mode. Not sure we set it.
+40000428 = Prescaler. Not set to anything. But we note it because it's mentioned alot in PWM docs.
+4000042c = ARR, this is set to 0x000001df
+40000438 = CCR2, this is what seems to go between 0x000000c8 - 0x000001de, with 0x155 the center.
+```
+CCR2 the configurable parameter.
+
+Cool, just by watching and skipping learning absolutely everything about pulse width modulation,
+we have learned 95% of what it takes to drive the contrast. In fact, this is our basic contrast function in the operating system!
+We skips tons of HALs and system libraries and confusion, and just cut straight to the heart of the matter.
+```
+void contrast(){
+  TIM3 -> CR1 = 0x81;
+  TIM3 -> SR  = 0x1f;
+  TIM3 -> CCMR1 = 0x00006800;
+  TIM3 -> CCER = 0x10;
+  TIM3 -> ARR  = 0x000001df;
+  TIM3 -> CCR2 = 0x00000155; // This is the contrast value.
+  TIM3 -> DMAR = 0x00000081;
+}
+```
+7 lines is cool.
+
+When you boot up an operating system with that function called, things seem pretty good.
+Our TIM3 values look just like the TIM3 values in the stock operating system, except
+Pin B5 is not flickering the way we'd expect. Contrast is 0. How do we hook TIM3
+to Pin B5? 
+
+A little internet investigation reveals
+```
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
+ ```
+ 
+ That plus our contrast function, we're in business! We now have all the ingredients to write a full LCD driver.
+ 
+ Now, we skipped past a lot of learning and understanding by just watching the TIM3 values and trying to clone them.
+ 
+ Let's spend a moment understanding what just happened. We set 7 pointers in TIM3
+ CR1, SR, CCMR1, CCER, ARR, CCR2, and DMAR.
+ 
+ Let's consult [Page 35 of the STM32 Timer Cookbook] (https://www.st.com/resource/en/application_note/dm00236305-generalpurpose-timer-cookbook-for-stm32-microcontrollers-stmicroelectronics.pdf).
