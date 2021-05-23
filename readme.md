@@ -604,4 +604,19 @@ A little internet investigation reveals
  Let's spend a moment understanding what just happened. We set 7 pointers in TIM3
  CR1, SR, CCMR1, CCER, ARR, CCR2, and DMAR.
  
- Let's consult [Page 35 of the STM32 Timer Cookbook] (https://www.st.com/resource/en/application_note/dm00236305-generalpurpose-timer-cookbook-for-stm32-microcontrollers-stmicroelectronics.pdf).
+ Let's consult [Page 35 of the STM32 Timer Cookbook](https://www.st.com/resource/en/application_note/dm00236305-generalpurpose-timer-cookbook-for-stm32-microcontrollers-stmicroelectronics.pdf)).
+ 
+ 
+## Writing a USB Driver
+
+This task seems daunting. Where do we even start? Maybe we can use some of the stuff we learned designing the LCD driver to make it easier.
+
+First, we learned our MCU has 100 pins. Anything coming in or going out of it needs to eventually go through one or more of those 100 pins.
+The STM32 datasheets mention a 'USB' peripheral, but we now know it's most likely some kind of alternate function
+of the existing GPIO pins (which means we'll be looking both for pins and for the AF mode to be configured and clocked
+like we saw with the LCD).
+
+We consult the [datasheet](https://www.st.com/resource/en/datasheet/cd00191185.pdf) and see if it mentions USB pins anywhere.
+
+
+
