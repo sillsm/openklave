@@ -466,6 +466,44 @@ lcdpulse
 
 Wow! 'g' has been written to the screen.
 
+## A small matter of contrast
 
+At this point, we have everything we need to write a quick driver in C
+to drive the LCD. Except hmm. We know a potentiometer is supposed to change the 
+LCD contrast, and it's not exactly apparent how this digital chip can
+send precisely tuned voltage. And which pin is doing it?
 
+By experimenting with all the GPIO pins, we can figure it out.
+Watch the GPIOB configuration and data.
+```
+display/1xw 0x40010c08
+display/1xw 0x40010c00
+```
+Ok, this is weird. If we pause the debugger and just stepi through the instructions, we notice
+x/xw 0x40010c08  0x40010c08:	0x0000ffd4
+x/xw 0x40010c08  0x40010c08:	0x0000fff4
+
+and back and forth. It looks like pin B5 is flipping back and forth between 1 and 0 on its own. 
+Learning about pulse width modulation here: link. This seems like an interesting candidate.
+
+And look at Pin 5's configuration. 
+```
+(gdb) x 0x40010c00
+0x40010c00:	0x44b84222
+```
+What the heck does b mean? 'Alternative function?' That seems new. If we set that pin to read
+```
+set {int} 0x40010c00 = 0x44484222
+```
+the screen contrast goes to 0. Ok. And if we change it from b to write:
+```
+set {int} 0x40010c00 = 0x44184222
+```
+the screen goes full contrast. Ok we're getting somewhere.
+
+### Shortcutting through pulse width modulation and timers.
+
+So Pin B5 is flickering alot, by itself apparently. And its voltage
+seems to drive the potentiometer, somehow. We also see its configuration
+is in this new 'alternative function'. What is that?
 
