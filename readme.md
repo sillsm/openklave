@@ -618,5 +618,17 @@ like we saw with the LCD).
 
 We consult the [datasheet](https://www.st.com/resource/en/datasheet/cd00191185.pdf) and see if it mentions USB pins anywhere.
 
+<p align="center">
+  <img width="460" height="300" src="/pics/USBPinMapDatasheet.png">
+</p>
 
+Huh, ok. Two pins mention USB, GPIOA11 and GPIOA12. But that can't be write. USB is a heavy protocol. It must require more than two pins right?
+
+<p align="center">
+  <img width="460" height="300" src="/pics/usbcableinside.png">
+</p>
+
+Wow, no. We're going to be consulting [USBMadeSimple](https://www.usbmadesimple.co.uk/) a lot for this section. It's a great, simple tutorial on the entire USB protocol with many pictures.
+
+All USB cables only have two datapins, D+ and D-. 
 
