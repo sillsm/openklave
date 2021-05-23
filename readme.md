@@ -405,7 +405,7 @@ current configuration.
 
 ## We wrote some characters.
 
-It appears GPIOB0 and GPIOB1 are driving the R/S and R/W bits of the LCD,
+It appears GPIOB1 and GPIOB2 are driving the R/S and R/W bits of the LCD,
 and that GPIOC0-GPIO-7 are driving the data bits. At this point this is 
 just a hypothesis.
 ```
@@ -414,11 +414,57 @@ just a hypothesis.
 0x40010c00 : 0x20000000
 0x40010c00 : 0x80000000
 0x40010c00 : 0x200000
+
+0x40011008 (idr) : 0x980067
+and then a g is written to the screen.
 ```
-And then the screen status changes.
 
 So breaking this down, what happened?
 
+0x980067 translates to 0b100110000000000001100111, and matching
+that last byte to to the ST7066 data sheet, [0110][0111] corresponds
+to the letter g. So we have confirmation that GPIOC0-7 are most likely
+wired to the LCD data.
+
+Now through experiment it appears GPIOB1 and GPIOB2 are actually driving 
+R/S and RW. But what does GPIOB0 do? It sends the enable clock pulse
+[0 - 1 - 0] to the LCD which drives one iteration of the circuit.
+
+Don't take my word for it, we can prove all of this is true within GDB.
+
+Boot up an unmodified MPK249 and pause it in GDB (ctrl-z). Define a
+'clock pulse' function. 
+
+```
+define lcdpulse
+  set {int} 0x40010c10 = 0x1
+  shell sleep .1
+  set {int} 0x40010c10 = 0x10000
+end
+```
+
+where this is proven to work on Mac and LINUX, but the 'shell sleep .1' needs an equivalent
+Windows command. Isn't this cool? We can use GDB to test out certain ideas and write
+fragments of code to verify those ideas before we even code them.
+
+While the debugger is paused, make sure the lower 8 GPIOC pins are set to write
+```
+set {int} 0x40011000 = 0x33333333
+```
+
+Write in the character 'g' into the LCD data:
+
+```
+set {int} 0x40011010 = 0x980067
+```
+
+and then 
+
+```
+lcdpulse
+```
+
+Wow! 'g' has been written to the screen.
 
 
 
