@@ -633,3 +633,12 @@ Wow, no. We're going to be consulting [USBMadeSimple](https://www.usbmadesimple.
 All USB cables only have two datapins, D+ and D-. According to our spec sheet, A11 is D- and A12 is D+. We also see from USBMadeSimple that the host (the computer) starts by making some calls two these pins. We'll need to intercept these calls, answer back, and then exchange data somehow.
 
 We'll also be consulting Kevin Cuzner's baremetal [USB Driver for STM32](http://kevincuzner.com/2018/01/29/bare-metal-stm32-writing-a-usb-driver/), as he went through many parallel challenges writing a USB driver for a STM32-powered watch.
+
+### Peripheral layout
+
+According to the datasheet, addresses 0x40005C00 - 0x40005FFF are for USB registers, and we have 512 bytes from 0x40006000 - 0x400063FF for USB SRAM, called PMA.
+The PMA area wasn't in the SVD layout I got, so I added an extra 512 byte memory layout starting from 0x40006000.
+
+Let's start with the peripheral registers. We have 512 bytes to do stuff with.
+
+
