@@ -639,6 +639,23 @@ We'll also be consulting Kevin Cuzner's baremetal [USB Driver for STM32](http://
 According to the datasheet, addresses 0x40005C00 - 0x40005FFF are for USB registers, and we have 512 bytes from 0x40006000 - 0x400063FF for USB SRAM, called PMA.
 The PMA area wasn't in the SVD layout I got, so I added an extra 512 byte memory layout starting from 0x40006000.
 
-Let's start with the peripheral registers. We have 512 bytes to do stuff with.
+Let's start with the peripheral registers. We have 512 bytes to do stuff with. While we're sorting through it, let's also have the [1000 page manual](https://www.st.com/resource/en/reference_manual/cd00171190-stm32f101xx-stm32f102xx-stm32f103xx-stm32f105xx-and-stm32f107xx-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf) open and see if it helps.
 
+| Address  | Name       |
+|----------|------------|
+| 40005c00 | EP0R       |
+| 40005c04 | EP1R       |
+| 40005c08 | EP2R       |
+| 40005c0c | EP3R       |
+| ...      |            |
+| 40005c1c | EP7R       |
+| 40005c20 | field_0x20 |
+| 40005c21 | field_0x21 |
+| ...      |            |
+| 40005c3f | field_0x3f |
+| 40005c40 | CNTR       |
+| 40005c44 | ISTR       |
+| 40005c48 | FNR        |
+| 40005c4c | DADDR      |
+| 40005c50 | BTABLE     |
 
