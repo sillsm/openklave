@@ -641,21 +641,21 @@ The PMA area wasn't in the SVD layout I got, so I added an extra 512 byte memory
 
 Let's start with the peripheral registers. We have 512 bytes to do stuff with. While we're sorting through it, let's also have the [1000 page manual](https://www.st.com/resource/en/reference_manual/cd00171190-stm32f101xx-stm32f102xx-stm32f103xx-stm32f105xx-and-stm32f107xx-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf) open and see if it helps.
 
-| Address  | Name       |
-|----------|------------|
-| 40005c00 | EP0R       |
-| 40005c04 | EP1R       |
-| 40005c08 | EP2R       |
-| 40005c0c | EP3R       |
-| ...      |            |
-| 40005c1c | EP7R       |
-| 40005c20 | field_0x20 |
-| 40005c21 | field_0x21 |
-| ...      |            |
-| 40005c3f | field_0x3f |
-| 40005c40 | CNTR       |
-| 40005c44 | ISTR       |
-| 40005c48 | FNR        |
-| 40005c4c | DADDR      |
-| 40005c50 | BTABLE     |
+| Address  | Name       | Summary    |
+|----------|------------|------------|
+| 40005c00 | EP0R       | Endpoint R |
+| 40005c04 | EP1R       |            |
+| 40005c08 | EP2R       |            |
+| 40005c0c | EP3R       |            |
+| ...      |            |            |
+| 40005c1c | EP7R       |            |
+| 40005c20 | field_0x20 |            |
+| 40005c21 | field_0x21 |            |
+| ...      |            |            |
+| 40005c3f | field_0x3f |            |
+| 40005c40 | CNTR       | control    |
+| 40005c44 | ISTR       | interupt status|
+| 40005c48 | FNR        | frame #    |
+| 40005c4c | DADDR      | device address           |
+| 40005c50 | BTABLE     |   buffer table         |
 
