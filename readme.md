@@ -659,3 +659,30 @@ Let's start with the peripheral registers. We have 512 bytes to do stuff with. W
 | 40005c4c | DADDR      | device address           |
 | 40005c50 | BTABLE     |   buffer table         |
 
+### Detecting a reset signal from host and triggering our interrupt
+
+The most basic functionality a USB driver can do is detect when the host computer sends a reset signal, and trigger an interrupt flag set, which should call our predefined interrupt function.
+
+This is truly the most basic thing we can do, and it demonstrates we've understood how to turn the USB peripheral on and at least kind of properly initialize endpoint 0.
+
+Let's monitor the interesting USB registers we learned about in the reference manual, and also the first few spots in the PMA. The PMA is the memory buffer area where USB data packets are sent and received.
+
+These register printouts will be extremely useful, so we'll be coming back to them again and again. We'll take a similar approach to how we learned about PWM for the LCD: watching values change over time, and making little proof programs in GDB to demonstrate we've understood the basic functionality, before coding our driver.
+
+```
+ display/t "USBDeviceAddress", *0x40005c4c & 0b11111111
+ display/t "USBDevice->CNTR",  *0x40005c40
+ display/t "USBDevice->ISTR",  *0x40005c44
+ display/t "USBDevice->EP0R",  *0x40005c00
+ display/t "USBDevice->EP1R",  *0x40005c04
+ display/x "BTABLE START AD",  *0x40005c50
+ display/20xw "PMA" 0x40006000
+```
+
+The objective for this exercise is to have the interrupt register flag bit 10 set by the hardware, as that is "set when the USB peripheral detects an active USB RESET signal at its inputs". The interrupt register is 0x40005c44.
+
+So we reset the device, hold down the enter button to load the bootloader, and do the below to see when the interrupt register changes.
+```
+watch *0x40005c44
+```
+
