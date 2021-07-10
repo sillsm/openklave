@@ -14,14 +14,14 @@ SOURCES += $(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/sta
 PROJECT ?= led
 
 # compiler, objcopy (should be in PATH)
-CC = arm-none-eabi-gcc
+CC = arm-none-eabi-g++
 OBJCOPY = arm-none-eabi-objcopy
 
 # path to st-flash (or should be specified in PATH)
 ST_FLASH ?= st-flash
 
 # specify compiler flags
-CFLAGS  = -g -O2 -Wall
+CFLAGS  = -g -O2 -Wall -Wunused --specs=nosys.specs -std=c++17
 #CFLAGS += -T$(STD_PERIPH_LIBS)/Project/STM32F10x_StdPeriph_Template/TrueSTUDIO/STM3210B-EVAL/stm32_flash.ld
 CFLAGS += -T stm32_flash.ld
 CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork
