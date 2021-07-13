@@ -122,13 +122,16 @@ typedef struct BTable{
     uint32_t count_rx;
 } btable;
 
+int amIInASetAddressTransaction = 0;
+
 void usbReset(void){
+    amIInASetAddressTransaction = 0;
     // Set 3rd bit of GPIOD, which we're pretty sure
     // triggers a pull up resistor on D+.
     GPIOD->CRL = 0x88844244;
     GPIOD->BSRR = 4;
 
-    USB->DADDR  |= 0x80;
+    USB->DADDR  = 0x80;
 
     // Tell interrupt plz process reset.
     USB->CNTR = 0b1000010000000000;
@@ -144,7 +147,7 @@ void usbReset(void){
     //Enable the USB interrupt
     // set ep0r start_rx to valid, endpoint type to control
     //USB->EP0R = 0b0011001000000000;
-    USB->EP0R = 0b0011001000110000;
+    USB->EP0R = 0b0011001000100000;
 }
 
 // Each bit can be Read, Read/Write, or
@@ -242,18 +245,123 @@ constexpr void SetRegister(uint32_t * ptr, int value){
   return;
 }
 
+// Get the USB Device Addressed assigned by Host.
+int USBDeviceAddress(void){
+  uint32_t * USB_DEVICE = (uint32_t *)0x40005c4c;
+  return *USB_DEVICE & 0b1111111;
+}
 
+int DeviceConfigRequestState = 0;
 
-int amIInASetAddressTransaction = 0;
 void usb(){
+
+  // Check if I need to reset
+  if ((USB->ISTR &0b10000000000) > 0 ){
+    //writeString((char*)"  Re ");
+    usbReset();
+    return;
+  }
   // Joking around with ISTR handlers.
   uint32_t * val = (uint32_t *)0x40006040;
   uint32_t * USB_EP0R = (uint32_t *)0x40005c00;
   //uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
 
-  // Check if I need to reset
-  if ((USB->ISTR &0b10000000000) > 0 ){
-    usbReset();
+  USBEndpointState EP0State = GetEndpointState(*USB_EP0R);
+  // ACK if just got a clear feature request.
+  if ((USBDeviceAddress() != 0) & (*val == 0x0000) & (*(val+1) == 0x0100)){
+    USB->ISTR = 0;
+
+   // Could be anything next who knows
+   USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
+   SetRegister(USB_EP0R, setEndpointState(state));//EP_Stat_RX, 0b11);
+   btable * b = (btable *) 0x40006000;
+   b->count_tx= 0;
+   return;
+
+  }
+
+  // If the device is addressed, and we're in a device configuration request.
+  if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0100))
+  {
+    // Is it a SETUP token? Then get ready for an IN.
+    if (EP0State.isSetupToken){
+      // Clear interrupts.
+      USB->ISTR = 0;
+      // Get ready for an IN token next.
+      USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
+      SetRegister(USB_EP0R, setEndpointState(state));
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 8;
+      DeviceConfigRequestState = 0;
+      return;
+    }
+    //writeString((char*)"  GOT TO HERE ");
+     // test copy some dead beef stuff
+    uint32_t * PMAWrite = (uint32_t *)0x40006050;
+    /*
+    0x40006050:	0x00000112	0x00000110	0x00000000	0x00000800
+    0x40006060:	0x0000194c	0x0000d03d	0x0000a2b8	0x0000ae98
+    0x40006070:	0x000036a0	0x0000e58a	0x000017bc	0x00007719
+    */
+    //                       len|bcdUSB
+    // this needs to be 18 bytes. 4.5 words.
+    /*
+
+    Product ID:	0x0024
+Vendor ID:	0x09e8  (AKAI  professional M.I. Corp.)
+Version:	1.00
+Serial Number:	NO SERIAL NUMBER
+Speed:	Up to 12 Mb/s
+Manufacturer:	Akai
+Location ID:	0x14110000 / 44
+Current Available (mA):	500
+*/
+// second piece
+// 0x000009e8	0x00000024	0x00000000	0x00000800
+    const uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x00010102, 0x00010000};
+
+    if (DeviceConfigRequestState == 2){
+      for (int i = 0; i< 4; i++){
+        *PMAWrite = toPMA((msg+4), i);
+        PMAWrite++;
+      }
+      DeviceConfigRequestState = DeviceConfigRequestState + 1;
+    }
+
+    if (DeviceConfigRequestState == 1){
+      for (int i = 0; i< 4; i++){
+        *PMAWrite = toPMA((msg+2), i);
+        PMAWrite++;
+      }
+      DeviceConfigRequestState = DeviceConfigRequestState + 1;
+    }
+
+    if (DeviceConfigRequestState == 0){
+      //btable * b = (btable *) 0x40006050;
+      //b->add_tx = 0x1201;
+      //b->count_tx= 0x0110;
+      //b->add_rx = 0;
+      //b->count_rx = 0x8;
+      for (int i = 0; i< 4; i++){
+        *PMAWrite = toPMA(msg, i);
+        PMAWrite++;
+      }
+      DeviceConfigRequestState =  DeviceConfigRequestState + 1;
+    }
+
+    // Set msg length to 18 = 0x12
+    btable * b = (btable *) 0x40006000;
+    b->count_tx= 0x8;
+
+    // clear interrupts
+    USB->ISTR = 0;
+
+    // next message could be in or out depending on if the config request message
+    // is done yet.
+    USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
+    SetRegister(USB_EP0R, setEndpointState(state));
+
+    return;
   }
 
   // Check if I need to set device address.
@@ -326,6 +434,40 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 }
 
 }
+/*
+volatile uint32_t * record2 = (uint32_t *) 0x20006000;
+// Bootloader logging code
+extern "C"{
+__attribute__((section(".mySection")))
+void BootloaderLogger(void){
+  //if ((USB->ISTR & 0b0000010000000000) > 0){
+     //char res[] = "reset";
+     // writeString(res);
+
+  //}
+
+  uint32_t * val = (uint32_t *)0x40006040;
+  // This logs all the values every time the
+  // interrupt was called, starting with
+  // initial value 0xdeadbeef at
+  // Don't log an event if it's the same as the last one.
+
+  uint32_t EP0StatusBefore = USB -> EP0R;
+  usb();
+  uint32_t EP0StatusAfter  = USB -> EP0R;
+
+  *record2 = *val;
+  *(record2+1) = *(val + 1);
+  *(record2+2) = EP0StatusBefore;
+  *(record2+3) = EP0StatusAfter ;
+  *(record2+4)= 0xdeadbeef;
+  record2 = record2 + 4;
+
+  return;
+}
+
+}*/
+
 // We put this include right before main.
 // So test code can reference the above declared code.
 #include "test_main.h"

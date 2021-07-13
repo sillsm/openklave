@@ -31,7 +31,7 @@ constexpr auto ToArray(const int (&i)[N]){
 
 template<typename A, typename B>
 __attribute__((noinline))
-__attribute__((error("\nwant, got")))
+__attribute__((error("\nTest failed: want, got")))
 static constexpr void actually_got(void) {abort(); } // must
 
 template <size_t N, typename F, size_t... indexes>
