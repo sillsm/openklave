@@ -253,6 +253,8 @@ int USBDeviceAddress(void){
 
 int DeviceConfigRequestState = 0;
 
+int DeviceDescriptorState = 0;
+
 void usb(){
 
   // Check if I need to reset
@@ -280,6 +282,61 @@ void usb(){
 
   }
 
+  // If the device is addressed, and we're in a get configuration request
+  if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0302)){
+    uint32_t * PMAWrite = (uint32_t *)0x40006050;
+    // Is it a SETUP token? Then get ready for an IN.
+    if (EP0State.isSetupToken){
+      USB->ISTR = 0;
+      // Get ready for an IN token next.
+      //USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
+      //SetRegister(USB_EP0R, setEndpointState(state));
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 8;
+      DeviceDescriptorState = 0;
+    }
+
+    const uint32_t msg[] = {0x09020009, 0x01011001, 0x69690000};
+
+
+    if (DeviceDescriptorState == 1){
+      // Set msg length to 18 = 0x12
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0x8;
+      for (int i = 0; i< 4; i++){
+        *PMAWrite = toPMA((msg+2), i);
+        PMAWrite++;
+      }
+      DeviceDescriptorState = DeviceDescriptorState + 1;
+    }
+
+    if (DeviceDescriptorState == 0){
+      // Set msg length to 18 = 0x12
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0x8;
+      //btable * b = (btable *) 0x40006050;
+      //b->add_tx = 0x1201;
+      //b->count_tx= 0x0110;
+      //b->add_rx = 0;
+      //b->count_rx = 0x8;
+      for (int i = 0; i< 4; i++){
+        *PMAWrite = toPMA(msg, i);
+        PMAWrite++;
+      }
+      DeviceDescriptorState =  DeviceDescriptorState + 1;
+    }
+    // clear interrupts
+    USB->ISTR = 0;
+
+    // next message could be in or out depending on if the config request message
+    // is done yet.
+    USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
+    SetRegister(USB_EP0R, setEndpointState(state));
+
+    return;
+
+  }
+
   // If the device is addressed, and we're in a device configuration request.
   if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0100))
   {
@@ -288,12 +345,12 @@ void usb(){
       // Clear interrupts.
       USB->ISTR = 0;
       // Get ready for an IN token next.
-      USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
-      SetRegister(USB_EP0R, setEndpointState(state));
+      //USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
+      //SetRegister(USB_EP0R, setEndpointState(state));
       btable * b = (btable *) 0x40006000;
       b->count_tx= 8;
       DeviceConfigRequestState = 0;
-      return;
+      //return;
     }
     //writeString((char*)"  GOT TO HERE ");
      // test copy some dead beef stuff
@@ -318,9 +375,27 @@ Current Available (mA):	500
 */
 // second piece
 // 0x000009e8	0x00000024	0x00000000	0x00000800
-    const uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x00010102, 0x00010000};
+    //const uint32_t msg[] = {0x01121001, 0x00000800, 0xe8092400, 0x00010102, 0x00010000, 0x00010000};
+    const uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x01100000, 0x00010000, 0x00010000};
+    //const uint32_t msg[] = {0x01121001, 0x00000800, 0xe8092400, 0x00010102, 0x00010000, 0x00010000};
+    if (DeviceConfigRequestState == 3){
+      // Just sign off on status message here.
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0;
+      // clear interrupts
+      USB->ISTR = 0;
 
+      // next message could be in or out depending on if the config request message
+      // is done yet.
+      USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, NAK, CONTROL, 0 };
+      SetRegister(USB_EP0R, setEndpointState(state));
+      return;
+
+    }
     if (DeviceConfigRequestState == 2){
+      // Set msg length to 18 = 0x12
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0x2;
       for (int i = 0; i< 4; i++){
         *PMAWrite = toPMA((msg+4), i);
         PMAWrite++;
@@ -329,6 +404,9 @@ Current Available (mA):	500
     }
 
     if (DeviceConfigRequestState == 1){
+      // Set msg length to 18 = 0x12
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0x8;
       for (int i = 0; i< 4; i++){
         *PMAWrite = toPMA((msg+2), i);
         PMAWrite++;
@@ -337,6 +415,9 @@ Current Available (mA):	500
     }
 
     if (DeviceConfigRequestState == 0){
+      // Set msg length to 18 = 0x12
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 0x8;
       //btable * b = (btable *) 0x40006050;
       //b->add_tx = 0x1201;
       //b->count_tx= 0x0110;
@@ -349,9 +430,6 @@ Current Available (mA):	500
       DeviceConfigRequestState =  DeviceConfigRequestState + 1;
     }
 
-    // Set msg length to 18 = 0x12
-    btable * b = (btable *) 0x40006000;
-    b->count_tx= 0x8;
 
     // clear interrupts
     USB->ISTR = 0;
