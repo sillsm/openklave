@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Multi-byte USB sequences are LOW BYTE - High BYTE
+#define USBList(a,b) b, a
+
 // Annoying secret word that needs to go at the
 // end of the binary so the default bootloader doesn't
 // try to delete it.
@@ -205,6 +208,195 @@ constexpr struct Mask EP_addr    = {0b0000000000001111, 0};
 constexpr struct Mask EP_Stat_RX = {0b0011000000000000, 12};
 constexpr struct Mask EP_Stat_TX = {0b0000000000110000,  4};
 
+// Defaults up to 20 bytes in PMA.
+struct PMAAllocation{
+    uint32_t a[20];
+};
+//onst uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x01100000, 0x00010000, 0x00010000};
+
+static constexpr uint8_t dev_descriptor[] = {
+    18, //bLength
+    1, //bDescriptorType
+    0x10, 0x01, //bcdUSB
+    0x00, //bDeviceClass (defined by interfaces)
+    0x00, //bDeviceSubClass
+    0x00, //bDeviceProtocl
+    0x08, //bMaxPacketSize0
+    0x09, 0xe8, //idVendor
+    0x00, 0x24, //idProduct
+    0x10, 0x01, //bcdDevice
+    0, //iManufacturer
+    0, //iProduct
+    0, //iSerialNumber,
+    1, //bNumConfigurations
+};
+
+static constexpr uint8_t configurationDescriptor[] = {
+    9, //bLength
+    2, //bDescriptorType
+    0x00, 34, // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
+    0x01, //bNumInterfaces Number of interfaces.
+    0x01, //bConfigurationValue
+    0x00, //iConfiguration (unused)
+    0x60, //bmAttributes
+    0x00, //MaxPower, not applicable
+};
+
+
+static constexpr uint8_t standardACDescriptor[] = {
+    9,    //bLength
+    4,    //bDescriptorType
+    0x00, //Index of this interface
+    0x00, //bAlternateSetting
+    0x00, //bNumEndpoints
+    0x01, //bInterface AUDIO
+    0x01, //BinterfaceSubclass AUDIO_CONTROL
+    0x00, //Unused
+    0x00, //Unused
+};
+
+static constexpr uint8_t mouseConfiguration[] = {
+    9, //bLength
+    2, //bDescriptorType
+    USBList(0x00, 34), // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
+    0x01, //bNumInterfaces Number of interfaces.
+    0x01, //bConfigurationValue
+    0x00, //iConfiguration (unused)
+    0x60, //bmAttributes
+    0x00, //MaxPower, not applicable
+    // Mouse HID interface
+    9, // bLength
+    4, //bDescriptorType Interface
+    0, // Zero-based Interface number
+    0, // alternate setting
+    1, // bNumEndpoints
+    3, // HID
+    1, // Boot Interface
+    2, // Mouse
+    0, // Index of String descritpro
+    // Generic HID header
+    9, // bLength
+    0x21, //HID
+    USBList(0x01, 0x10), // HID Class Spec
+    0, //No country code
+    1, // 1 descriptor
+    34,// DescriptorType
+    USBList(0, 52), //Descriptor length
+    // Endpoint for mouse
+    7, // Length
+    5, // bDescriptorType ENDPOINT
+    0x81,// Endpoint 1 -IN
+    0x03,// Interrupt data point
+    USBList(0, 4), // Max packet size,
+    10, // Polling rate, every X ms.
+};
+
+/*
+static constexpr uint8_t midiInterfaceDescriptor[] = {
+    9, //bLength
+    2, //bDescriptorType
+    0x00, 30, // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
+    0x01, //bNumInterfaces Number of interfaces.
+    0x01, //bConfigurationValue
+    0x00, //iConfiguration (unused)
+    0x80, //bmAttributes bus powered
+    0x32, //MaxPower, not applicable
+};
+*/
+
+// Make a Device Configuration into new PMA Allocation.
+constexpr PMAAllocation NewDeviceConfiguration(const uint8_t * src){
+   PMAAllocation r = {};
+   int DeviceConfigurationPermutation[] ={
+    0,
+    1,
+    3,2,
+    4,
+    5,
+    6,
+    7,
+    9,8,
+    11,10,
+    13,12,
+    14,
+    15,
+    16,
+    17,
+    };
+   for (int i = 0; i < 9; i++){
+       // Permute to make sure multi-byte strings
+       // are LOW BYTE to HIGH BYTE
+       uint32_t a = src[DeviceConfigurationPermutation[2*i]];
+       uint32_t b = src[DeviceConfigurationPermutation[(2*i)+1]];
+       // Swap each high and low bytes because M3 is little endian
+       r.a[i] = a | (b << 8);
+   }
+   return r;
+}
+
+// Make a ConfigurationDescriptor into new PMA Allocation.
+constexpr PMAAllocation NewConfigurationDescriptor(const uint8_t * src){
+   PMAAllocation r = {};
+   // A Configuration descriptor is 9 bytes, so pad the end.
+   for (int i = 0; i < 4; i++){
+       // Permute to make sure multi-byte strings
+       // are LOW BYTE to HIGH BYTE
+       uint32_t a = src[i];
+       uint32_t b = src[i+1];
+       // Swap each high and low bytes because M3 is little endian
+       r.a[i] = a | (b << 8);
+   }
+   r.a[4]=configurationDescriptor[8]; //odd byte
+   // Reswap the multibyte field.
+   r.a[1]= configurationDescriptor[3] | (configurationDescriptor[2] << 8);
+   return r;
+}
+
+constexpr PMAAllocation NewStandardACDescriptor(const uint8_t * src){
+  PMAAllocation r = {};
+  for (int i = 0; i < 4; i++){
+      // Permute to make sure multi-byte strings
+      // are LOW BYTE to HIGH BYTE
+      uint32_t a = src[i];
+      uint32_t b = src[i+1];
+      // Swap each high and low bytes because M3 is little endian
+      r.a[i] = a | (b << 8);
+  }
+  r.a[4]=src[8]; //odd byte
+  return r;
+}
+
+constexpr PMAAllocation mouseConfigToPMA(const uint8_t * src){
+       PMAAllocation r = {};
+       for (int i = 0; i < 17; i++){
+          uint32_t a = src[i*2];
+          uint32_t b = src[(i*2)+1];
+          // Swap each high and low bytes because M3 is little endian
+         r.a[i] = a | (b << 8);
+       }
+
+    return r;
+}
+
+struct Iterator{
+  const int pos;
+  const int size;
+  const uint32_t currentWord;
+  const PMAAllocation message;
+};
+
+
+constexpr Iterator NewIterator(const PMAAllocation msg, const int size){
+  return Iterator{-1, size, 0, msg};
+}
+
+constexpr Iterator AdvanceIterator(Iterator i){
+    //if (i.pos == i.size) return Iterator{i.pos+1, i.size, 69, i.message};
+    uint32_t w = i.message.a[i.pos + 1];
+    return Iterator{i.pos+1, i.size, w, i.message};
+}
+
+
 // Take bytes from RAM and get them in PMA form.
 constexpr uint32_t toPMA(const uint32_t * src, int position){
     uint32_t word = src[position/2];
@@ -255,7 +447,21 @@ int DeviceConfigRequestState = 0;
 
 int DeviceDescriptorState = 0;
 
+Iterator * currentMessageIterator = 0;
+uint32_t * sigil = (uint32_t *)0x40006130;
+
 void usb(){
+  // Compile time allocation and inlining of Device Descriptor.
+  constexpr PMAAllocation deviceDescriptor = NewDeviceConfiguration(dev_descriptor);
+  constexpr PMAAllocation configDescriptor = NewConfigurationDescriptor(configurationDescriptor);
+  constexpr PMAAllocation standardAC = NewStandardACDescriptor(standardACDescriptor);
+
+  constexpr PMAAllocation mouseTry = mouseConfigToPMA(mouseConfiguration);
+
+  // Message tracking variables to exist for lifetime of program.
+  static int messagePosition = 0;
+  static int messageSize = 0;
+  static const PMAAllocation * currentMessage = 0;
 
   // Check if I need to reset
   if ((USB->ISTR &0b10000000000) > 0 ){
@@ -281,167 +487,6 @@ void usb(){
    return;
 
   }
-
-  // If the device is addressed, and we're in a get configuration request
-  if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0302)){
-    uint32_t * PMAWrite = (uint32_t *)0x40006050;
-    // Is it a SETUP token? Then get ready for an IN.
-    if (EP0State.isSetupToken){
-      USB->ISTR = 0;
-      // Get ready for an IN token next.
-      //USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
-      //SetRegister(USB_EP0R, setEndpointState(state));
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 8;
-      DeviceDescriptorState = 0;
-    }
-
-    const uint32_t msg[] = {0x09020009, 0x01011001, 0x69690000};
-
-
-    if (DeviceDescriptorState == 1){
-      // Set msg length to 18 = 0x12
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0x8;
-      for (int i = 0; i< 4; i++){
-        *PMAWrite = toPMA((msg+2), i);
-        PMAWrite++;
-      }
-      DeviceDescriptorState = DeviceDescriptorState + 1;
-    }
-
-    if (DeviceDescriptorState == 0){
-      // Set msg length to 18 = 0x12
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0x8;
-      //btable * b = (btable *) 0x40006050;
-      //b->add_tx = 0x1201;
-      //b->count_tx= 0x0110;
-      //b->add_rx = 0;
-      //b->count_rx = 0x8;
-      for (int i = 0; i< 4; i++){
-        *PMAWrite = toPMA(msg, i);
-        PMAWrite++;
-      }
-      DeviceDescriptorState =  DeviceDescriptorState + 1;
-    }
-    // clear interrupts
-    USB->ISTR = 0;
-
-    // next message could be in or out depending on if the config request message
-    // is done yet.
-    USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
-    SetRegister(USB_EP0R, setEndpointState(state));
-
-    return;
-
-  }
-
-  // If the device is addressed, and we're in a device configuration request.
-  if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0100))
-  {
-    // Is it a SETUP token? Then get ready for an IN.
-    if (EP0State.isSetupToken){
-      // Clear interrupts.
-      USB->ISTR = 0;
-      // Get ready for an IN token next.
-      //USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, NAK, VALID, CONTROL, 0 };
-      //SetRegister(USB_EP0R, setEndpointState(state));
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 8;
-      DeviceConfigRequestState = 0;
-      //return;
-    }
-    //writeString((char*)"  GOT TO HERE ");
-     // test copy some dead beef stuff
-    uint32_t * PMAWrite = (uint32_t *)0x40006050;
-    /*
-    0x40006050:	0x00000112	0x00000110	0x00000000	0x00000800
-    0x40006060:	0x0000194c	0x0000d03d	0x0000a2b8	0x0000ae98
-    0x40006070:	0x000036a0	0x0000e58a	0x000017bc	0x00007719
-    */
-    //                       len|bcdUSB
-    // this needs to be 18 bytes. 4.5 words.
-    /*
-
-    Product ID:	0x0024
-Vendor ID:	0x09e8  (AKAI  professional M.I. Corp.)
-Version:	1.00
-Serial Number:	NO SERIAL NUMBER
-Speed:	Up to 12 Mb/s
-Manufacturer:	Akai
-Location ID:	0x14110000 / 44
-Current Available (mA):	500
-*/
-// second piece
-// 0x000009e8	0x00000024	0x00000000	0x00000800
-    //const uint32_t msg[] = {0x01121001, 0x00000800, 0xe8092400, 0x00010102, 0x00010000, 0x00010000};
-    const uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x01100000, 0x00010000, 0x00010000};
-    //const uint32_t msg[] = {0x01121001, 0x00000800, 0xe8092400, 0x00010102, 0x00010000, 0x00010000};
-    if (DeviceConfigRequestState == 3){
-      // Just sign off on status message here.
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0;
-      // clear interrupts
-      USB->ISTR = 0;
-
-      // next message could be in or out depending on if the config request message
-      // is done yet.
-      USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, NAK, CONTROL, 0 };
-      SetRegister(USB_EP0R, setEndpointState(state));
-      return;
-
-    }
-    if (DeviceConfigRequestState == 2){
-      // Set msg length to 18 = 0x12
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0x2;
-      for (int i = 0; i< 4; i++){
-        *PMAWrite = toPMA((msg+4), i);
-        PMAWrite++;
-      }
-      DeviceConfigRequestState = DeviceConfigRequestState + 1;
-    }
-
-    if (DeviceConfigRequestState == 1){
-      // Set msg length to 18 = 0x12
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0x8;
-      for (int i = 0; i< 4; i++){
-        *PMAWrite = toPMA((msg+2), i);
-        PMAWrite++;
-      }
-      DeviceConfigRequestState = DeviceConfigRequestState + 1;
-    }
-
-    if (DeviceConfigRequestState == 0){
-      // Set msg length to 18 = 0x12
-      btable * b = (btable *) 0x40006000;
-      b->count_tx= 0x8;
-      //btable * b = (btable *) 0x40006050;
-      //b->add_tx = 0x1201;
-      //b->count_tx= 0x0110;
-      //b->add_rx = 0;
-      //b->count_rx = 0x8;
-      for (int i = 0; i< 4; i++){
-        *PMAWrite = toPMA(msg, i);
-        PMAWrite++;
-      }
-      DeviceConfigRequestState =  DeviceConfigRequestState + 1;
-    }
-
-
-    // clear interrupts
-    USB->ISTR = 0;
-
-    // next message could be in or out depending on if the config request message
-    // is done yet.
-    USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
-    SetRegister(USB_EP0R, setEndpointState(state));
-
-    return;
-  }
-
   // Check if I need to set device address.
   if (amIInASetAddressTransaction){
     USB -> DADDR |= *(val + 1);
@@ -452,12 +497,13 @@ Current Available (mA):	500
     USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, NAK, CONTROL, 0 };
     SetRegister(USB_EP0R, setEndpointState(state));
     //SetRegister(USB_EP0R, 02, 0b11);//EP_Stat_TX, 0b11);
+    amIInASetAddressTransaction = 0; // reset
     return;
   }
 
   // If it was a setup packet.
   //if ((USB->EP0R &0b100000000000) > 0 ) {
-  if (GetRegister(*USB_EP0R, EP_Setup)){
+  if (GetRegister(*USB_EP0R, EP_Setup) & (USBDeviceAddress() == 0)){
     USB->ISTR = 0;
 
     if ((*val &0x500 ) > 0 ){
@@ -478,6 +524,107 @@ Current Available (mA):	500
       return;
     }
   }
+
+  if (EP0State.isSetupToken){
+      // Clear interrupts.
+      //USB->ISTR = 0;
+      btable * b = (btable *) 0x40006000;
+      b->count_tx= 8;
+    // If the device is addressed, and we're in a device configuration request.
+    if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0100))
+    {
+      currentMessage = &deviceDescriptor;
+      messagePosition = 0;
+      messageSize = 9;
+    }
+
+    if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0f00))
+    {
+      currentMessage = &deviceDescriptor;
+      messagePosition = 1;
+      messageSize = 0;
+      // Send this right to ACK transaction.
+    }
+    // If the device is addressed, and we're in a configuration descriptor request.
+    if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0200))
+    {
+      static int configured = 0;
+      //currentMessage = &configDescriptor;
+      currentMessage = &mouseTry;
+      messagePosition = 0;
+      messageSize = 5; // To examine
+      if (configured) messageSize = 17;
+      configured = 1;
+    }
+    /*
+    if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0300))
+    {
+      currentMessageIterator = &standardACInterfaceIterator;
+      uint32_t * sigil2 = (uint32_t *)0x400061d0;
+      *sigil2 = 0xeeee;
+
+    }*/
+  }
+    if (currentMessage != 0){
+      // Is it a SETUP token? Then get ready for an IN.
+
+
+      uint32_t * PMAWrite = (uint32_t *)0x40006050;
+      btable * b = (btable *) 0x40006000;
+      //b->count_tx= 0x2;?
+      b->count_tx= 8;
+      // b-> count_tx defaults to 8 bytes.
+      // We might hit this a few times to get the whole 18byte messages
+      // in 8 bit chunks. So we use an iterator object that remembers where
+      // it was in the stream to read the data out to the PMA.
+      //
+      // Of interest: in our C + constexpr scheme, the exact values to write to
+      // PMA as 32 byte numbers are already stored in the iterator at compiletime.
+
+
+      static uint32_t * logSigil = (uint32_t *)0x40006150;
+      for (int i = 0; i< 4; i++){
+        if (messagePosition == messageSize + 1){
+          // We're in the ACK status transaction.
+          // We just got a zero length out token.
+          // Ack it.
+          b -> count_tx = 0;
+          //currentMessage = 0;
+          break;
+        }
+        if (messagePosition == messageSize){
+          b -> count_tx = i*2;
+          //currentMessage  = 0;
+          if (( currentMessage == &mouseTry) & (messageSize == 5) ){
+            b -> count_tx = 1;
+          }
+          *logSigil = 0xFFFF;
+          logSigil++;
+          *logSigil = b-> count_tx;
+          logSigil++;
+          messagePosition++; // To indicate status.
+          break;
+        }
+        *PMAWrite = currentMessage -> a[messagePosition];
+        *logSigil = *PMAWrite;
+        logSigil++;
+        messagePosition++;
+        PMAWrite++;
+
+      }
+
+      // clear interrupts
+      USB->ISTR = 0;
+
+      // next message could be in or out depending on if the config request message
+      // is done yet.
+      USBEndpointState state = USBEndpointState{*USB_EP0R, 0, 0, 0, VALID, VALID, CONTROL, 0 };
+      SetRegister(USB_EP0R, setEndpointState(state));
+
+      return;
+    }
+    return;
+
 }
 
 volatile uint32_t * record = (uint32_t *) 0x20005000;
@@ -512,39 +659,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 }
 
 }
-/*
-volatile uint32_t * record2 = (uint32_t *) 0x20006000;
-// Bootloader logging code
-extern "C"{
-__attribute__((section(".mySection")))
-void BootloaderLogger(void){
-  //if ((USB->ISTR & 0b0000010000000000) > 0){
-     //char res[] = "reset";
-     // writeString(res);
 
-  //}
-
-  uint32_t * val = (uint32_t *)0x40006040;
-  // This logs all the values every time the
-  // interrupt was called, starting with
-  // initial value 0xdeadbeef at
-  // Don't log an event if it's the same as the last one.
-
-  uint32_t EP0StatusBefore = USB -> EP0R;
-  usb();
-  uint32_t EP0StatusAfter  = USB -> EP0R;
-
-  *record2 = *val;
-  *(record2+1) = *(val + 1);
-  *(record2+2) = EP0StatusBefore;
-  *(record2+3) = EP0StatusAfter ;
-  *(record2+4)= 0xdeadbeef;
-  record2 = record2 + 4;
-
-  return;
-}
-
-}*/
 
 // We put this include right before main.
 // So test code can reference the above declared code.

@@ -113,8 +113,20 @@ void TestPMACopy(){
   if (test) {};
 }
 
+void TestPMAIterators(){
+  constexpr PMAAllocation deviceDescriptor = NewDeviceConfiguration(dev_descriptor);
+  constexpr Iterator deviceDescriptorIterator = NewIterator(deviceDescriptor, 9);
+  constexpr auto v1 = AdvanceIterator(deviceDescriptorIterator);
+  EXPECT((v1.currentWord == 0x0112), v1.currentWord);
+
+  constexpr auto v2 = AdvanceIterator(v1);
+  EXPECT((v2.currentWord == 0x1001), v2.currentWord);
+
+}
+
 void Test(){
   TestGetRegisterUpdateValue();
   TestUSBFunctions();
   TestPMACopy();
+  TestPMAIterators();
 }
