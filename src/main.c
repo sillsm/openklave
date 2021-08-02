@@ -127,32 +127,6 @@ typedef struct BTable{
 
 int amIInASetAddressTransaction = 0;
 
-void usbReset(void){
-    amIInASetAddressTransaction = 0;
-    // Set 3rd bit of GPIOD, which we're pretty sure
-    // triggers a pull up resistor on D+.
-    GPIOD->CRL = 0x88844244;
-    GPIOD->BSRR = 4;
-
-    USB->DADDR  = 0x80;
-
-    // Tell interrupt plz process reset.
-    USB->CNTR = 0b1000010000000000;
-    // Reset interrupts.
-    USB->ISTR = 0;
-    // Restore first part of PMA
-    btable * b = (btable *) 0x40006000;
-    b->add_tx = 0x00000028;
-    b->count_tx= 0;
-    b->add_rx = 0x20;
-    b->count_rx = 0x00001000;
-    //USB->CNTR = USB_CNTR_PDWN;
-    //Enable the USB interrupt
-    // set ep0r start_rx to valid, endpoint type to control
-    //USB->EP0R = 0b0011001000000000;
-    USB->EP0R = 0b0011001000100000;
-}
-
 // Each bit can be Read, Read/Write, or
 // Toggle (flips value on 1, no change on 0)
 enum BitType{R, RW, T};
@@ -210,7 +184,7 @@ constexpr struct Mask EP_Stat_TX = {0b0000000000110000,  4};
 
 // Defaults up to 20 bytes in PMA.
 struct PMAAllocation{
-    uint32_t a[20];
+    uint32_t a[52];
 };
 //onst uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x01100000, 0x00010000, 0x00010000};
 
@@ -289,6 +263,36 @@ static constexpr uint8_t mouseConfiguration[] = {
     0x03,// Interrupt data point
     USBList(0, 4), // Max packet size,
     10, // Polling rate, every X ms.
+};
+
+static constexpr uint8_t mouseHIDDescriptor[] = {
+  0x05, 0x01,
+  0x09, 0x02,
+  0xA1, 0x01,
+  0x09, 0x01,
+  0xA1, 0x00,
+  0x05, 0x09,
+  0x19, 0x01,
+  0x29, 0x05,
+  0x15, 0x00,
+  0x25, 0x01,
+  0x95, 0x05,
+  0x75, 0x01,
+  0x81, 0x02,
+  0x95, 0x01,
+  0x75, 0x03,
+  0x81, 0x01,
+  0x05, 0x01,
+  0x09, 0x30,
+  0x09, 0x31,
+  0x09, 0x38,
+  0x15, 0x81,
+  0x25, 0x7F,
+  0x75, 0x08,
+  0x95, 0x03,
+  0x81, 0x06,
+  0xC0,
+  0xC0,
 };
 
 /*
@@ -378,6 +382,17 @@ constexpr PMAAllocation mouseConfigToPMA(const uint8_t * src){
     return r;
 }
 
+constexpr PMAAllocation NewMouseHIDReportToPMA(const uint8_t * src){
+       PMAAllocation r = {};
+       for (int i = 0; i < 26; i++){
+          uint32_t a = src[i*2];
+          uint32_t b = src[(i*2)+1];
+          // Swap each high and low bytes because M3 is little endian
+         r.a[i] = a | (b << 8);
+       }
+    return r;
+}
+
 struct Iterator{
   const int pos;
   const int size;
@@ -450,6 +465,60 @@ int DeviceDescriptorState = 0;
 Iterator * currentMessageIterator = 0;
 uint32_t * sigil = (uint32_t *)0x40006130;
 
+void usbReset(void){
+    amIInASetAddressTransaction = 0;
+    // Set 3rd bit of GPIOD, which we're pretty sure
+    // triggers a pull up resistor on D+.
+    GPIOD->CRL = 0x88844244;
+    GPIOD->BSRR = 4;
+
+    USB->DADDR  = 0x80;
+
+    // Tell interrupt plz process reset.
+    USB->CNTR = 0b1000010000000000;
+    // Reset interrupts.
+    USB->ISTR = 0;
+    // Restore first part of PMA
+    btable * b = (btable *) 0x40006000;
+    b->add_tx = 0x00000028;
+    b->count_tx= 0;
+    b->add_rx = 0x20;
+    b->count_rx = 0x00001000;
+    //USB->CNTR = USB_CNTR_PDWN;
+    //Enable the USB interrupt
+    // set ep0r start_rx to valid, endpoint type to control
+    //USB->EP0R = 0b0011001000000000;
+    USB->EP0R = 0b0011001000100000;
+
+    // Now do stuff for EP01, our mouse interrupt transfer
+    uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
+    USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
+    SetRegister(USB_EP1R, setEndpointState(state));
+
+    b = (btable *) 0x40006010;
+    b->add_tx = 0x00000030;
+    b->count_tx= 4;
+    b->add_rx = 0x35;
+    b->count_rx = 0x00001000;
+}
+
+// Test function to move mouse to the right
+void usb_ep1(){
+  // clear interrupts
+  uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
+  USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
+  USB->ISTR = 0;
+
+  uint32_t * PMAWrite = (uint32_t *)0x40006060;
+  *PMAWrite = 0;
+  PMAWrite++;
+  *PMAWrite = 1;
+  btable * b = (btable *) 0x40006010;
+  b->count_tx= 4;
+  SetRegister(USB_EP1R, setEndpointState(state));
+  return;
+}
+
 void usb(){
   // Compile time allocation and inlining of Device Descriptor.
   constexpr PMAAllocation deviceDescriptor = NewDeviceConfiguration(dev_descriptor);
@@ -457,11 +526,19 @@ void usb(){
   constexpr PMAAllocation standardAC = NewStandardACDescriptor(standardACDescriptor);
 
   constexpr PMAAllocation mouseTry = mouseConfigToPMA(mouseConfiguration);
+  constexpr PMAAllocation mouseHID = NewMouseHIDReportToPMA(mouseHIDDescriptor);
 
   // Message tracking variables to exist for lifetime of program.
   static int messagePosition = 0;
   static int messageSize = 0;
   static const PMAAllocation * currentMessage = 0;
+
+  // Most of this is for enumeration on Endpoint 0. If we have other requests,
+  // forward them along.
+  if ((USB->ISTR &0b1111) == 1 ){
+    usb_ep1();
+    return;
+  }
 
   // Check if I need to reset
   if ((USB->ISTR &0b10000000000) > 0 ){
@@ -556,6 +633,15 @@ void usb(){
       if (configured) messageSize = 17;
       configured = 1;
     }
+
+    // Get HID Report Descriptor for a USB Mouse.
+    if ((USBDeviceAddress() != 0) & (*val == 0x0681) & (*(val+1) == 0x2200))
+    {
+      currentMessage = &mouseHID;
+      messagePosition = 0;
+      messageSize = 26; // To examine
+    }
+
     /*
     if ((USBDeviceAddress() != 0) & (*val == 0x0680) & (*(val+1) == 0x0300))
     {
