@@ -184,7 +184,7 @@ constexpr struct Mask EP_Stat_TX = {0b0000000000110000,  4};
 
 // Defaults up to 20 bytes in PMA.
 struct PMAAllocation{
-    uint32_t a[52];
+    uint32_t a[56];
 };
 //onst uint32_t msg[] = {0x12010110, 0x00000008, 0xe8092400, 0x01100000, 0x00010000, 0x00010000};
 
@@ -216,20 +216,8 @@ static constexpr uint8_t configurationDescriptor[] = {
     0x00, //MaxPower, not applicable
 };
 
-
-static constexpr uint8_t standardACDescriptor[] = {
-    9,    //bLength
-    4,    //bDescriptorType
-    0x00, //Index of this interface
-    0x00, //bAlternateSetting
-    0x00, //bNumEndpoints
-    0x01, //bInterface AUDIO
-    0x01, //BinterfaceSubclass AUDIO_CONTROL
-    0x00, //Unused
-    0x00, //Unused
-};
-
 static constexpr uint8_t mouseConfiguration[] = {
+    // Configuration Descriptor
     9, //bLength
     2, //bDescriptorType
     USBList(0x00, 34), // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
@@ -295,18 +283,129 @@ static constexpr uint8_t mouseHIDDescriptor[] = {
   0xC0,
 };
 
-/*
-static constexpr uint8_t midiInterfaceDescriptor[] = {
-    9, //bLength
-    2, //bDescriptorType
-    0x00, 30, // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
-    0x01, //bNumInterfaces Number of interfaces.
-    0x01, //bConfigurationValue
-    0x00, //iConfiguration (unused)
-    0x80, //bmAttributes bus powered
-    0x32, //MaxPower, not applicable
+static constexpr uint8_t USBMidiOneOutConfig[] = {
+  // USB MIDI 2.0 Specification.
+  //
+  // Configuration Descriptor
+  9, //bLength
+  2, //bDescriptorType
+  USBList(0x00, 101), // wTotalLength in bytes of this and subsequent interface + endpoint descriptors
+  0x02, //bNumInterfaces Number of interfaces.
+  0x01, //bConfigurationValue
+  0x00, //iConfiguration (unused)
+  0x60, //bmAttributes
+  0x00, //MaxPower, not applicable
+  // Standard AC Interface Descriptor
+  9, // bLength
+  4, // bDescriptorType Interface Descriptor
+  0, // Zero-based Interface number
+  0, // alternate setting
+  0, // bNumEndpoints
+  1, // AUDIO
+  1, // AUDIO_CONTROL
+  0, // Unused
+  0, // Unused
+  // Class-specific AC Interface Descriptor
+  // B.2.2
+  9, // bLength
+  0x24, //CS_INTERFACE
+  1, //HEADER subtypbe
+  USBList(1,0), // bcdADC
+  USBList(0,9), // Total size of class specific descriptors
+  1, // 1 number of streaming interface
+  1, // Designate MIDIStreaming interface
+  //
+  // MIDIStreaming Interface 2.0
+  // B.6.1
+  9, // length of descriptor
+  4, // interface descriptor
+  1, // index of this interface
+  0, // Index of alternate setting.
+  2, // 2 endpoints
+  1, // AUDIO Class
+  3, // MIDISTREAMING sub Class
+  0, // unused
+  0, // unused
+  // B.6.2
+  7, // length of descriptor.
+  0x24,// CS_INTERFACE descriptor
+  1, // MIDISTREAMING header subtypbe
+  USBList(0x01,0x00), // MS_MIDI_2.0
+  USBList(0,65), // dummy field used for conformity with MIDI 1.0
+  // B.8.1
+  // B.4.3 MIDI IN Jack Descriptor
+  		6, // This length
+  		36,// This type
+  		2, // MIDI_IN_JACK
+  		1, // EMBEDDED bJackType
+  		1, // Jack ID
+  		0, // String Id
+
+  		6, // This length
+  		36,// This type
+  		2, // MIDI_IN_JACK desc subtype
+  		2, // EXTERNAL bJackType
+  		2, // Jack ID
+  		0, // String ID
+
+  //B.4.4 MIDI OUT Jack Descriptor
+  		9, // This length
+  		36,// This type
+  		3, // MIDI_OUT_JACK
+  		1, // EMBEDDED bJackType
+  		3, // bJackID
+  		1, // No of input pins
+  		2, // BaSourceID
+  		1, // BaSourcePin
+  		0, // string descriptor
+
+  		9, // This length
+  		36,// This type
+  		3, // MIDI_OUT_JACK
+  		2, // EXTERNAL bJackType
+  		4, // bJackID
+  		1, // bNrInputPins
+  		1, // baSourceID (0)
+  		1, // baSourcePin (0)
+  		0, // string descriptor
+
+  //B.5.1 Interrupt OUT
+  // Note this is Midi 1.0, but oddly, interrupt is supported as of Big Sur on
+  // MAC. Great latency, but need to see if compatible and/or compliant.
+  		9,   // This length
+  		5,   // bDescriptorType = endpoint
+  		0x1, // bEndpointAddress OUT endpoint number 1
+  		3,   //  bmAttributes: 3:Interrupt endpoint 2:Bulk, see note above.
+  		8, 0,// wMaxPacketSize  = 8 bytes
+  		200, // bInterval Interrupt polling interval in ms
+  		0,   // bRefresh
+  		0,   // bSyncAddress
+
+  // B.5.2 Class-specific MS Bulk OUT Endpoint Descriptor
+  		5,  // This length
+  		37, // This type
+  		1,  // This subtype
+  		1,  // bNumEmbMIDIJack
+  		1,  // baAssocJackID (0)
+
+  //B.6 Bulk IN Endpoint Descriptors
+  //B.6.1 Standard Bulk IN Endpoint Descriptor
+  		9,    // This length.
+  		5,    // endpoint descriptor
+  		0x81, // IN address.
+  		3,    // bmAttributes: 3: Interrupt endpoint 2: Bulk, see note above.
+  		8, 0, // wMaxPacketSize
+  		10,   // bInterval in ms 
+  		0,    // bRefresh
+  		0,    // bSyncAddress
+
+  // B.6.2 Class-specific MS Bulk IN Endpoint Descriptor
+  		5, // This length
+  		37,// Desc type
+  		1, // Desc subtype
+  		1, // Num Jack
+  		3, // baAssocJackID (0)
 };
-*/
 
 // Make a Device Configuration into new PMA Allocation.
 constexpr PMAAllocation NewDeviceConfiguration(const uint8_t * src){
@@ -391,6 +490,21 @@ constexpr PMAAllocation NewMouseHIDReportToPMA(const uint8_t * src){
          r.a[i] = a | (b << 8);
        }
     return r;
+}
+
+// length 55
+constexpr PMAAllocation NewUSBMIDIToPMA(const uint8_t * src){
+  PMAAllocation r = {};
+  for (int i = 0; i < 50; i++){
+      // Permute to make sure multi-byte strings
+      // are LOW BYTE to HIGH BYTE
+      uint32_t a = src[(i*2)];
+      uint32_t b = src[(i*2)+1];
+      // Swap each high and low bytes because M3 is little endian
+      r.a[i] = a | (b << 8);
+  }
+  r.a[50]=src[100]; //odd byte
+  return r;
 }
 
 struct Iterator{
@@ -504,29 +618,44 @@ void usbReset(void){
 
 // Test function to move mouse to the right
 void usb_ep1(){
+  static int note = 48;
   // clear interrupts
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
   USB->ISTR = 0;
 
+  static int i = 0;
+  i++;
+  if ((i%100) != 0){
+    state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
+    btable * b = (btable *) 0x40006010;
+    b->count_tx= 0; // Transmit nothing.
+    SetRegister(USB_EP1R, setEndpointState(state));
+    return;
+  }
+
+  // 144 120 100
   uint32_t * PMAWrite = (uint32_t *)0x40006060;
-  *PMAWrite = 0;
+  *PMAWrite = 121 | (144 << 8); // Chan 1 Note on
   PMAWrite++;
-  *PMAWrite = 1;
+  //*PMAWrite = 120; // note 120
+  //PMAWrite++;
+  *PMAWrite = note | (100 << 8); // note velocity
   btable * b = (btable *) 0x40006010;
-  b->count_tx= 4;
+  b->count_tx= 3;
   SetRegister(USB_EP1R, setEndpointState(state));
+  note++;
   return;
 }
 
 void usb(){
   // Compile time allocation and inlining of Device Descriptor.
   constexpr PMAAllocation deviceDescriptor = NewDeviceConfiguration(dev_descriptor);
-  constexpr PMAAllocation configDescriptor = NewConfigurationDescriptor(configurationDescriptor);
-  constexpr PMAAllocation standardAC = NewStandardACDescriptor(standardACDescriptor);
 
   constexpr PMAAllocation mouseTry = mouseConfigToPMA(mouseConfiguration);
   constexpr PMAAllocation mouseHID = NewMouseHIDReportToPMA(mouseHIDDescriptor);
+
+  constexpr PMAAllocation USBMidi  = NewUSBMIDIToPMA(USBMidiOneOutConfig);
 
   // Message tracking variables to exist for lifetime of program.
   static int messagePosition = 0;
@@ -627,10 +756,12 @@ void usb(){
     {
       static int configured = 0;
       //currentMessage = &configDescriptor;
-      currentMessage = &mouseTry;
+      currentMessage = &USBMidi;
       messagePosition = 0;
       messageSize = 5; // To examine
-      if (configured) messageSize = 17;
+      // THIS IS VERY STUPID. We shouldn't need to know messageSize here.
+      // A data type should encapsulate all this information.
+      if (configured) messageSize = 51;
       configured = 1;
     }
 
@@ -681,8 +812,11 @@ void usb(){
         if (messagePosition == messageSize){
           b -> count_tx = i*2;
           //currentMessage  = 0;
-          if (( currentMessage == &mouseTry) & (messageSize == 5) ){
+          // TODO this is a general issue for all configuration requests.
+          if (( currentMessage == &USBMidi) & (messageSize == 5) ){
             b -> count_tx = 1;
+          } else if (currentMessage == &USBMidi){
+            b -> count_tx = 5; // THIS IS SO FRAGILE AND WRONG.
           }
           *logSigil = 0xFFFF;
           logSigil++;
@@ -692,6 +826,9 @@ void usb(){
           break;
         }
         *PMAWrite = currentMessage -> a[messagePosition];
+        if ( (messagePosition == 4) & ( currentMessage == &USBMidi) & (messageSize == 5) ){
+          *PMAWrite = 0;
+        }
         *logSigil = *PMAWrite;
         logSigil++;
         messagePosition++;
@@ -723,7 +860,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
      // writeString(res);
 
   //}
-
+  int debug = 0;
   uint32_t * val = (uint32_t *)0x40006040;
   // This logs all the values every time the
   // interrupt was called, starting with
@@ -734,13 +871,14 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
   usb();
   uint32_t EP0StatusAfter  = USB -> EP0R;
 
-  *record = *val;
-  *(record+1) = *(val + 1);
-  *(record+2) = EP0StatusBefore;
-  *(record+3) = EP0StatusAfter ;
-  *(record+4)= 0xdeadbeef;
-  record = record + 4;
-
+  if (debug){
+    *record = *val;
+    *(record+1) = *(val + 1);
+    *(record+2) = EP0StatusBefore;
+    *(record+3) = EP0StatusAfter ;
+    *(record+4)= 0xdeadbeef;
+    record = record + 4;
+  }
   return;
 }
 
