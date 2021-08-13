@@ -377,7 +377,7 @@ static constexpr uint8_t USBMidiOneOutConfig[] = {
   		0x1, // bEndpointAddress OUT endpoint number 1
   		3,   //  bmAttributes: 3:Interrupt endpoint 2:Bulk, see note above.
   		8, 0,// wMaxPacketSize  = 8 bytes
-  		200, // bInterval Interrupt polling interval in ms
+  		5, // bInterval Interrupt polling interval in ms
   		0,   // bRefresh
   		0,   // bSyncAddress
 
@@ -395,7 +395,7 @@ static constexpr uint8_t USBMidiOneOutConfig[] = {
   		0x81, // IN address.
   		3,    // bmAttributes: 3: Interrupt endpoint 2: Bulk, see note above.
   		8, 0, // wMaxPacketSize
-  		10,   // bInterval in ms 
+  		10,   // bInterval in ms
   		0,    // bRefresh
   		0,    // bSyncAddress
 
@@ -618,7 +618,8 @@ void usbReset(void){
 
 // Test function to move mouse to the right
 void usb_ep1(){
-  static int note = 48;
+  int notes[]= {60, 64, 67, 59, 62, 67};
+  static int note = 0;
   // clear interrupts
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
@@ -626,7 +627,7 @@ void usb_ep1(){
 
   static int i = 0;
   i++;
-  if ((i%100) != 0){
+  if ((i%2) != 0){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -640,7 +641,7 @@ void usb_ep1(){
   PMAWrite++;
   //*PMAWrite = 120; // note 120
   //PMAWrite++;
-  *PMAWrite = note | (100 << 8); // note velocity
+  *PMAWrite = (notes[note%6] + (note/6)) | (100 << 8); // note velocity
   btable * b = (btable *) 0x40006010;
   b->count_tx= 3;
   SetRegister(USB_EP1R, setEndpointState(state));
@@ -884,6 +885,47 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 
 }
 
+void USARTSetup(){
+  /*
+  From the STM32 F103 Manual.
+
+1. Enable the USART by writing the UE bit in USART_CR1 register to 1.
+
+0x00000040
+
+40004814 is USART3_cr3
+What is UE bit.
+2. Program the M bit in USART_CR1 to define the word length.
+What is
+3. Program the number of stop bits in USART_CR2.
+4. Select DMA enable (DMAT) in USART_CR3 if Multi buffer Communication is to take
+place. Configure the DMA register as explained in multibuffer communication.
+5. Select the desired baud rate using the USART_BRR register.
+*/
+// 40004800 STATUS REGISTER FOR USART3
+uint32_t * USART3_CR1 = (uint32_t *) 0x4000480c;
+uint32_t * USART3_CR2 = (uint32_t *) 0x40004810;
+uint32_t * USART3_CR3 = (uint32_t *) 0x40004814;
+uint32_t * USART3_BAUD= (uint32_t *) 0x40004808;
+*USART3_CR1  = 0x0000340c;
+*USART3_CR2 = 0;
+*USART3_CR3 = 0x40;
+*USART3_BAUD= 0x34;
+
+// Now for DMA stuff.
+
+
+uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
+uint32_t * DMA1_CPAR = (uint32_t *)   0x40020038;
+uint32_t * DMA1_CMAR = (uint32_t *)   0x4002003c;
+uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
+*DMA1_CPAR = 0x40004804;
+*DMA1_CMAR = 0x20001a86; // Some spot in ram is dest.
+*DMA1_CNDTR = 0xFF;
+// Circular buffer, high priority.
+*DMA1_CCR3 = 0x000030a1; // Must be inited last.
+return;
+}
 
 // We put this include right before main.
 // So test code can reference the above declared code.
@@ -919,12 +961,25 @@ int main(void) {
     //Turn on LCD backlight
     GPIO_SetBits(GPIOE, 0x1000);
 
+    // Turn on USART3 for keybed signals routing.
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);//?
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    // Enable DMA1 clock.
+    RCC->AHBENR |= (1 << 0);
+
+
+    GPIOB -> CRH = 0xa8a22444;
+    //GPIOD -> CRH = 0x422a444b;
+    GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
+    //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
+    USARTSetup();
+
     copyPatterns();
 
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  OPEN Klave  ");
+    writeString((char*)"  OPEN Kave  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;
