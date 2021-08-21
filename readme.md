@@ -21,7 +21,7 @@ This project does not copy or redistribute any copyright-protectible software fr
 which prevents modification. As device owners, it is our legal right to arbitrarily modify our devices without restriction, and to write and share original software
 to advance this purpose.
 
-If you receive any notifications from any party to the contrary, let us know in the Github Issues. 
+If you receive any notifications from any party to the contrary, let us know in the Github Issues.
 
 ## Required background-knowledge and tools
 
@@ -38,7 +38,7 @@ But our goal is to permit keyboard users to execute arbitrary code on the keyboa
 
 ### Investigating the firmware
 
-Unscrew the screws at the bottom of your keyboard, and investigate the primary printed circuit board. 
+Unscrew the screws at the bottom of your keyboard, and investigate the primary printed circuit board.
 
 <p align="center">
   <img width="460" height="300" src="/pics/mpk249pcb.jpg">
@@ -64,7 +64,7 @@ We assume you have installed:
 Here's what it should look like once you have the ST-Link/V2 plugged in to the MPK2. Note that this requires 2 usb connections to work. So you'll have the ST-LINK/v2 connected to the JTAG port and plugged into your computer's USB, and you'll have a second USB connection to the back of the keyboard, to power and send messages to it, like you would usually.
 
 <p align="center">
-  
+
   <img width="460" height="300" src="/pics/debugger-setup.jpg">
 </p>
 
@@ -107,7 +107,7 @@ Remote debugging using localhost:3333
 3. Enter 'stepi' to step forward one instruction on the keyboard.
 4. Reset the keyboard by entering 'monitor reset halt'. You will need to enter c to start it running like normal.
 
-#### Task: Demonstrate you can put your MPK249 in debug mode. 
+#### Task: Demonstrate you can put your MPK249 in debug mode.
 If you did everything right and sucessfully connected gdb to the MPK2, the unit will display cool debug stripes in the light pads indicating the keyboard is in debug mode. Notice how the MPK249 debug mode alters the pad colors between columns of blue and green.
 
 <p align="center">
@@ -125,7 +125,7 @@ Review the memory layout of the STM32.
 
 Memory addresses are represented in hexidecimal, so each digit goes 1 to 9, then A, B, C, D, E, F.
 
-There are two pieces of software running on the device, the bootloader, and the operating system. 
+There are two pieces of software running on the device, the bootloader, and the operating system.
 The bootloader is located from memory address 0x0 to 0x6000, and it is mirrored at 0x08000000 to 0x08006000.
 
 How much software is that? Let's review hexidecimal. 0x6000 means no ones, no 16s, no 256s, and 6 4096s.
@@ -148,15 +148,15 @@ GDB can copy sectors of memory from your MPK2 to your local filesystem using the
  dump binary memory bootloader.bin 0 0x6000
 ```
  Will dump the bootloader to a bin file. Note you can also dump it to an ihex file format, which we'll discuss more later.
- Make sure you keep this backup file in a safe place you never modify. 
+ Make sure you keep this backup file in a safe place you never modify.
  I personally went through several chips before I learned to back up and restore firmware properly.
- 
+
  ```
  dump binary memory mpk2os.bin 0x08006000 0x08033fff
  ```
- 
+
  Let's be safe and also dump the os in the ihex format so we can reload it using the bootloader
- 
+
  ```
 dump ihex memory mpk2os.ihex 0x08006000 0x08033fff
  ```
@@ -164,7 +164,7 @@ dump ihex memory mpk2os.ihex 0x08006000 0x08033fff
 Now shockingly enough, this bare ihex dump is sufficient to completely restore the operating system if you bork it during development.
 The bootloader has a built-in recovery mode which receives ihex as a sysex message and rerwrites the flash over usb.
 
-Rename mpk2os.ihex to mpk2os.syx, and add the following hex bytes to the beginning of the file. 
+Rename mpk2os.ihex to mpk2os.syx, and add the following hex bytes to the beginning of the file.
 
 #### Make sure you have a good hex editor handy
 https://hexed.it/ is excellent and it works in your browser.
@@ -180,16 +180,16 @@ F7
 ```
 
 And you can play mpk2os.syx to the system, for example by using software like Sysex Librarian, to restore it.
- 
+
  ### Minimal rtmidi program to send sysex to wipe the OS
- 
+
  ```
 import rtmidi
 midiout = rtmidi.MidiOut()
 midiout.open_port(0)
 header = [0xF0, 0x47, 0x00, 0x24]
 footer = [0xF7]
-msg = [0x72, 0, 0] 
+msg = [0x72, 0, 0]
 midiout.send_message(header + message + footer)
 ```
 
@@ -214,10 +214,10 @@ The first few bytes of the backed up OS should look like this:
 0x30, 0x34, 0x30, 0x38, 0x30, 0x30, 0x46, 0x32, 0x0D, 0x0A...
 ```
  ## Active Research
- 
+
 The goal is to enable a new device owner to overwrite an arbitrary address in memory, using only the usb connection and their laptop.
 This is likely possible in one of two ways: either a stack overflow, or using a facility in the current bootloader or OS.
- 
+
 We know that once the system is put in [0x72, 0, 0] mode, the OS is wiped at 0x6000 and after, and it is possible to use the ihex backup to rewrite the system.
 Here is a small test message you can use to overwrite the first four bytes of the OS with the following values:
 
@@ -236,7 +236,7 @@ testmsg = [0xF0, 0x47, 0x00, 0x24, 0x70, 0x3A, 0x30, 0x32, 0x30, 0x30, 0x30, 0x3
 	0x46, 0x46, 0x44, 0x30, 0x30, 0x30, 0x38, 0x46, 0x33, 0x45, 0x35, 0x30,
 	0x30, 0x30, 0x38, 0x38, 0x34, 0x0D, 0x0A]
 ```
- 
+
 the question is, is it possible to overwrite specific addresses without completely wiping the OS beforehand? Need to investigate DMA.
 
 If you restart the device and hold the "Push to Enter" wheel down as it powers on you will see the message
@@ -247,7 +247,7 @@ to perform update
 ```
 Once the knob is released, the system will boot into normal mode, demonstrating no part of the OS was erased.
 
-In this mode, if you send the testmsg message above over USB using rtmidi, 
+In this mode, if you send the testmsg message above over USB using rtmidi,
 we find that a routine was run that converted the ihex message characters into the exact four words we're looking for, and stored them at 0x200001495 in flash.
 ```
  x/4xw 0x20001495
@@ -255,7 +255,7 @@ we find that a routine was run that converted the ihex message characters into t
 
 When the system is in reset mode, these words are further overwritten to 0x6000, suggesting that there's some memory map between these flash addresses and the operating system, or a routine that otherwise copies these addresses to the OS.
 
-It appears after much examination, that 0x08000f88 is the function that does the copying from the flash to the device. We notice 1) this function moves 0x1 to 0x40022010 (the flash controller on STM32f1) before it writes, and that it 
+It appears after much examination, that 0x08000f88 is the function that does the copying from the flash to the device. We notice 1) this function moves 0x1 to 0x40022010 (the flash controller on STM32f1) before it writes, and that it
 ```
 strh r6, [r5, #0]
 ```
@@ -273,14 +273,14 @@ Please refer to the [reference card](https://www.ic.unicamp.br/~ranido/mc404/doc
 
 ## Finding an exploit to inject arbitrary code
 
-A significant amount of time was spent looking for areas where the last element of the stack frame 
+A significant amount of time was spent looking for areas where the last element of the stack frame
 could be overwritten to force the return to an arbitrary address.
 
 Here are some of the potential areas.
 
 ### ldrb and strb in loops
 
-[Start here.](https://medium.com/techmaker/stack-buffer-overflow-in-stm32-b73fa3f0bf23). There are a few ways to allocate stack. 
+[Start here.](https://medium.com/techmaker/stack-buffer-overflow-in-stm32-b73fa3f0bf23). There are a few ways to allocate stack.
 One is looking for sub sp, add sp instructions at the start and end of a function.
 
 Observe the function in the OS defined at 0x0800e5d0:
@@ -291,7 +291,7 @@ Observe the function in the OS defined at 0x0800e5d0:
 	...
         0800e5ec 11 b0           add        sp,#0x44
 ```
-A stack 0x44 bytes long (68 bytes) is being allocated. The operations that take place between the elipses 
+A stack 0x44 bytes long (68 bytes) is being allocated. The operations that take place between the elipses
 will almost certainly write to the stack frame. If you can find a subroutine, for example a loop,
 that checks for a terminator, or uses some other means besides the stack size to determine
 how many times to allocate to the stack, there's a possibility of finding an exploit.
@@ -313,7 +313,7 @@ Here's a similar loop, but this one waits for a string terminator to stop copyin
 0x8006276   bne        LAB_0800626c     (keep looping if r2 isn't 0)
 ```
 Here, if there was a way to write an arbitrary length stream of data starting at r1, this routine
-could help us copy into the address at r0, possibly corrupting the stack frame and allowing 
+could help us copy into the address at r0, possibly corrupting the stack frame and allowing
 us to inject arbitrary code.
 
 Here's yet another variant of this pattern, this time using ldmia and stmia.
@@ -335,13 +335,13 @@ WH2004a.
 
 [Here is the full specification](https://www.winstar.com.tw/products/character-lcd-display-module/wh2004a.html) distributed by the manufacturer.
 
-There are a couple of different ways to drive it, but our brand uses '6800 interface (ST7066 IC)'. We're going to have to 
+There are a couple of different ways to drive it, but our brand uses '6800 interface (ST7066 IC)'. We're going to have to
 initialize it, send some clock pulses to it from our STM32, and come up with a loop to update the screen.
 
 [Here is the data sheet for the ST7066] (https://www.sparkfun.com/datasheets/LCD/st7066.pdf), which is pin compatible with the HD44780.
 
 
-We don't get to decide arbitrarily whether we'll use GPIO, IC2, or something else to drive the LCD. The STM32F103 is slotted into 
+We don't get to decide arbitrarily whether we'll use GPIO, IC2, or something else to drive the LCD. The STM32F103 is slotted into
 the MPK249 PCB, and there are already dedicated connected to the LCD ribbon.
 
 <p align="center">
@@ -373,7 +373,7 @@ which are wired via ribbon cable to the MPK2 device.
 
 Mostly, the pins are written via the 0x10 address extension (BSRR).
 
-Critically, you need to watch (and set) two seperate things, the GPIO configuration (is the pin input or output, what is its speed etc)., and the data coming out of the pin (0 or 1). 
+Critically, you need to watch (and set) two seperate things, the GPIO configuration (is the pin input or output, what is its speed etc)., and the data coming out of the pin (0 or 1).
 
 The below 4 gdb instructions will show you config status (0x00) and data read (0x08) address values for GPIOB and GPIOC.
 Theoretically, if just GPIOB and GPIOC are driving the LCD, these four values are all we need to track over time to
@@ -397,16 +397,16 @@ Port C Config
 
 Port C Data
 
-Note also, the BSRR function just *overwrites* certain pin values, it 
-does not change them all at once. So you really need to track GPIO values over time 
+Note also, the BSRR function just *overwrites* certain pin values, it
+does not change them all at once. So you really need to track GPIO values over time
 to understand what's going on; it's not enough to see a given value is stored in a GPIO register
-that corresponds to BSRR, because you're missing the current values its amending, and the port's 
+that corresponds to BSRR, because you're missing the current values its amending, and the port's
 current configuration.
 
 ## We wrote some characters.
 
 It appears GPIOB1 and GPIOB2 are driving the R/S and R/W bits of the LCD,
-and that GPIOC0-GPIO-7 are driving the data bits. At this point this is 
+and that GPIOC0-GPIO-7 are driving the data bits. At this point this is
 just a hypothesis.
 ```
 0x40010c00 : 0x70000
@@ -426,14 +426,14 @@ that last byte to to the ST7066 data sheet, [0110][0111] corresponds
 to the letter g. So we have confirmation that GPIOC0-7 are most likely
 wired to the LCD data.
 
-Now through experiment it appears GPIOB1 and GPIOB2 are actually driving 
+Now through experiment it appears GPIOB1 and GPIOB2 are actually driving
 R/S and RW. But what does GPIOB0 do? It sends the enable clock pulse
 [0 - 1 - 0] to the LCD which drives one iteration of the circuit.
 
 Don't take my word for it, we can prove all of this is true within GDB.
 
 Boot up an unmodified MPK249 and pause it in GDB (ctrl-z). Define a
-'clock pulse' function. 
+'clock pulse' function.
 
 ```
 define lcdpulse
@@ -458,7 +458,7 @@ Write in the character 'g' into the LCD data:
 set {int} 0x40011010 = 0x980067
 ```
 
-and then 
+and then
 
 ```
 lcdpulse
@@ -469,7 +469,7 @@ Wow! 'g' has been written to the screen.
 ## A small matter of contrast
 
 At this point, we have everything we need to write a quick driver in C
-to drive the LCD. Except hmm. We know a potentiometer is supposed to change the 
+to drive the LCD. Except hmm. We know a potentiometer is supposed to change the
 LCD contrast, and it's not exactly apparent how this digital chip can
 send precisely tuned voltage. And which pin is doing it?
 
@@ -483,10 +483,10 @@ Ok, this is weird. If we pause the debugger and just stepi through the instructi
 x/xw 0x40010c08  0x40010c08:	0x0000ffd4
 x/xw 0x40010c08  0x40010c08:	0x0000fff4
 
-and back and forth. It looks like pin B5 is flipping back and forth between 1 and 0 on its own. 
+and back and forth. It looks like pin B5 is flipping back and forth between 1 and 0 on its own.
 Learning about pulse width modulation here: link. This seems like an interesting candidate.
 
-And look at Pin 5's configuration. 
+And look at Pin 5's configuration.
 ```
 (gdb) x 0x40010c00
 0x40010c00:	0x44b84222
@@ -515,7 +515,7 @@ There's a pin diagram for our chip, a high density, LQFP, 100 pin STM32F103 C se
 
 We see from the spec sheet that PIN B5 corresponds to TIM3, which is a clock ticky peripheral.
 
-At this point, we could go learn about that, but let's see how much we can get away with just 
+At this point, we could go learn about that, but let's see how much we can get away with just
 by reading TIM3 values in gdb! It's a memory-mapped peripheral system after all, and there should
 be no hidden variables. If TIM3 does stuff, let's see if we can learn just by watching it.
 
@@ -536,7 +536,7 @@ TIM3
 0x40000430:	0x00000000	0x00000000	0x00000155	0x00000000
 0x40000440:	0x00000000	0x00000000	0x00000000	0x00000081
 ```
-where [] seems to go up and down as we stepi, 
+where [] seems to go up and down as we stepi,
 no matter what else is happening in the system.
 ```
 Contrast 99:
@@ -588,7 +588,7 @@ void contrast(){
 When you boot up an operating system with that function called, things seem pretty good.
 Our TIM3 values look just like the TIM3 values in the stock operating system, except
 Pin B5 is not flickering the way we'd expect. Contrast is 0. How do we hook TIM3
-to Pin B5? 
+to Pin B5?
 
 A little internet investigation reveals
 ```
@@ -596,17 +596,17 @@ A little internet investigation reveals
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
  ```
- 
+
  That plus our contrast function, we're in business! We now have all the ingredients to write a full LCD driver.
- 
+
  Now, we skipped past a lot of learning and understanding by just watching the TIM3 values and trying to clone them.
- 
+
  Let's spend a moment understanding what just happened. We set 7 pointers in TIM3
  CR1, SR, CCMR1, CCER, ARR, CCR2, and DMAR.
- 
+
  Let's consult [Page 35 of the STM32 Timer Cookbook](https://www.st.com/resource/en/application_note/dm00236305-generalpurpose-timer-cookbook-for-stm32-microcontrollers-stmicroelectronics.pdf)).
- 
- 
+
+
 ## Writing a USB Driver
 
 This task seems daunting. Where do we even start? Maybe we can use some of the stuff we learned designing the LCD driver to make it easier.
@@ -686,3 +686,107 @@ So we reset the device, hold down the enter button to load the bootloader, and d
 watch *0x40005c44
 ```
 
+# Getting Signals from the Keybed
+
+This is wildly condensed and took days of careful note taking to whittle down,
+but. It looks like the keybed communicates via USART3 to the main chip.
+It appears DMA is configured to echo these messages to RAM. There's some kind
+of message passing to the keybed to get it to work, but
+
+Almost successful start sequence in GDB:
+```
+set {int} 0x40021004 = 0x11440a
+set {int} 0x40021000 = 0x3035583
+
+define setClocks
+  # Enable DMA1 Clock
+  # RCC->AHBENR = 1
+  set {int}0x40021014= *0x40021014 | 1
+  # Enable USART3 Clock
+  # RCC_APB1ENR bit 18
+  set {int}0x4002101c= *0x4002101c | (1 << 18)
+  # Enable TIM4 Clock
+  # RCC_APB1ENR bit 2
+  set {int}0x4002101c= *0x4002101c | (1 << 2)
+  # Clock AFIO_MAPR
+  set {int}0x40021018 = 0x407d
+  # Correct Vals for RCC_CFGR
+end
+
+define initDMA1
+ # Set CPAR to USART3_DR
+ set {int} 0x40020038= 0x40004804
+ # Set CMAR to spot in RAM
+ set {int} 0x4002003c= 0x20001a86
+ # Set CNDR (buffer length)
+ set {int}0x40020034=0x100
+ # DMA1_CCR3
+ # Circular buffer, High priority
+ # Set last for DMA
+ set {int} 0x40020030= 0x000030a1
+end
+
+define TIM4
+  # display/x "TIM4_CR1", *0x40000800
+  set {int} 0x40000800 = 1
+  # display/x "TIM4_SR ", *0x40000810
+  set {int} 0x40000810= 0x1f
+  # display/x "CCMR_IN1", *0x40000818
+  set {int} 0x40000818 = 0x30
+  # Set CCER
+  set {int} 0x40000820 = 0x1
+  # display/x "TIM4_ARR", *0x4000042c
+  set {int} 0x4000042c = 0xb
+end
+
+define initUSART3
+  # FullREMAP USART3 and Full remap TIM4
+  set{int} 0x40010004 = 0x1830
+  #USART_BAUD
+  set{int} 0x40004808 = 0x34
+  #USART3_CR1
+  set {int}0x4000480c= 0x340c
+  #USART3_CR3
+  set {int}0x40004814= 0x40
+end
+
+define gpioconfig
+  # Turn on GPIOD clock d
+  set {int}0x40021018 = *0x40021018 | 0b100000
+  # GPIOD ODR
+  set {int}0x4001140c= 0x60e0
+  # GPIOD IDR
+  set {int}0x40011408= 0x7ffb
+  # GPIOD Config_HIGHBITS
+  set {int}0x40011404= 0x222a444b
+end
+```
+
+Variables of interest to monitor:
+```
+display/32xw 0x20001a86
+display/x *0x40020034
+display/x "GPIOD ODR", *0x4001140c
+display/x "GPIOD IDR", *0x40011408
+display/x "GPIOD_Config_High",*0x40011404
+display/x "USART3_data", *0x40004804
+display/x "USART3_CR1",   *0x4000480c
+display/x "USART3_CR2",   *0x40004810
+display/x "USART_BAUD", *0x40004808
+display/x "USART3_CR3",   *0x40004814
+display/x "USART3_SR", *0x40004800
+display/x "DMA1_CPAR", *0x40020038
+display/x "AFIO_MAPR", *0x40010004
+display/x "DMA_ifcr", *0x40020004
+display/x "DMA_isr", *0x40020000
+display/x "APB2Enr", *0x40021018
+display/x "RCC_CR   ", *0x40021000
+display/x "RCC_CNFGR", *0x40021004
+display/x "B_LOW", *0x40010c00
+display/x "B_HI ", *0x40010c04
+display/x "B_IDR", *0x40010c08
+display/x "B_ODR", *0x40010c0c
+display/x "TIM4_CR1", *0x40000800
+display/x "TIM4_SR ", *0x40000810
+display/x "CCMR_IN1", *0x40000818
+```
