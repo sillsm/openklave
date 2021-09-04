@@ -693,12 +693,15 @@ but. It looks like the keybed communicates via USART3 to the main chip.
 It appears DMA is configured to echo these messages to RAM. There's some kind
 of message passing to the keybed to get it to work, but
 
-Almost successful start sequence in GDB:
+Successful keyboard start sequence in GDB.
 ```
-set {int} 0x40021004 = 0x11440a
-set {int} 0x40021000 = 0x3035583
+define TurnOnKeyboard
+  # SET CLOCKS
+  # RCC_CNFGR
+  set {int} 0x40021004 = 0x11440a
+  # RCC_CR
+  set {int} 0x40021000 = 0x3035583
 
-define setClocks
   # Enable DMA1 Clock
   # RCC->AHBENR = 1
   set {int}0x40021014= *0x40021014 | 1
@@ -711,22 +714,20 @@ define setClocks
   # Clock AFIO_MAPR
   set {int}0x40021018 = 0x407d
   # Correct Vals for RCC_CFGR
-end
 
-define initDMA1
- # Set CPAR to USART3_DR
- set {int} 0x40020038= 0x40004804
- # Set CMAR to spot in RAM
- set {int} 0x4002003c= 0x20001a86
- # Set CNDR (buffer length)
- set {int}0x40020034=0x100
- # DMA1_CCR3
- # Circular buffer, High priority
- # Set last for DMA
- set {int} 0x40020030= 0x000030a1
-end
+  # ENABLE DMA1
+  # Set CPAR to USART3_DR
+  set {int} 0x40020038= 0x40004804
+  # Set CMAR to spot in RAM
+  set {int} 0x4002003c= 0x20001a86
+  # Set CNDR (buffer length)
+  set {int}0x40020034=0x100
+  # DMA1_CCR3
+  # Circular buffer, High priority
+  # Set last for DMA
+  set {int} 0x40020030= 0x000030a1
 
-define TIM4
+  # ENABLE TIM4
   # display/x "TIM4_CR1", *0x40000800
   set {int} 0x40000800 = 1
   # display/x "TIM4_SR ", *0x40000810
@@ -737,9 +738,8 @@ define TIM4
   set {int} 0x40000820 = 0x1
   # display/x "TIM4_ARR", *0x4000042c
   set {int} 0x4000042c = 0xb
-end
 
-define initUSART3
+  # ENABLE USART3
   # FullREMAP USART3 and Full remap TIM4
   set{int} 0x40010004 = 0x1830
   #USART_BAUD
@@ -748,9 +748,18 @@ define initUSART3
   set {int}0x4000480c= 0x340c
   #USART3_CR3
   set {int}0x40004814= 0x40
-end
 
-define gpioconfig
+  # ENABLE GPIOB
+  #Turn on GPIOB clock
+  set {int}0x40021018 = *0x40021018 | 0b1000
+  #GPIOB_low
+  set {int}0x40010c00 = 0x44b84222
+  #GPIOB IDR
+  set {int}0x40010c08=0xffd0
+  #GPIOB ODR
+  set {int}0x40010c0c=0x10
+
+  # ENABLE GPIOD
   # Turn on GPIOD clock d
   set {int}0x40021018 = *0x40021018 | 0b100000
   # GPIOD ODR
@@ -758,7 +767,7 @@ define gpioconfig
   # GPIOD IDR
   set {int}0x40011408= 0x7ffb
   # GPIOD Config_HIGHBITS
-  set {int}0x40011404= 0x222a444b
+  set {int}0x40011404= 0x422a444b
 end
 ```
 
