@@ -886,7 +886,105 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 }
 
 void USARTSetup(){
+
+  // Set up system clocks.
+  //uint32_t * RCC_CNFGR = (uint32_t *) 0x40021004;
+  //  uint32_t * RCC_CR    = (uint32_t *) 0x40021000;
+
+  // Make sure PLL is disabled before you try to write
+  // config values. See p. 102 in manual.
+  //*RCC_CR    = 0;
+  //*RCC_CNFGR = 0x11440a;
+  //*RCC_CR    = 0x3035583;
+
+  // Set up TIM4
+  uint32_t * TIM4_CR1 = (uint32_t *) 0x40000800;
+  uint32_t * TIM4_SR  = (uint32_t *) 0x40000810;
+  uint32_t * TIM4_CCMR_IN1 = (uint32_t *)0x40000818;
+  uint32_t * TIM4_CCER    = (uint32_t *)0x40000820;
+  uint32_t * TIM4_ARR = (uint32_t *)0x4000042c;
+
+  *TIM4_CR1 = 1;
+  *TIM4_SR  = 0x1f;
+  *TIM4_CCMR_IN1 = 0x30;
+  *TIM4_CCER = 1;
+  *TIM4_ARR = 0xb;
+
   /*
+  # SET CLOCKS
+  # RCC_CNFGR
+  set {int} 0x40021004 = 0x11440a
+  # RCC_CR
+  set {int} 0x40021000 = 0x3035583
+
+  # Enable DMA1 Clock
+  # RCC->AHBENR = 1
+  set {int}0x40021014= *0x40021014 | 1
+  # Enable USART3 Clock
+  # RCC_APB1ENR bit 18
+  set {int}0x4002101c= *0x4002101c | (1 << 18)
+  # Enable TIM4 Clock
+  # RCC_APB1ENR bit 2
+  set {int}0x4002101c= *0x4002101c | (1 << 2)
+  # Clock AFIO_MAPR, and clock USART1, GPIOs
+  set {int}0x40021018 = 0x427d
+  # Correct Vals for RCC_CFGR
+
+  # ENABLE DMA1
+  # Set CPAR to USART3_DR
+  set {int} 0x40020038= 0x40004804
+  # Set CMAR to spot in RAM
+  set {int} 0x4002003c= 0x20001a86
+  # Set CNDR (buffer length)
+  set {int}0x40020034=0x100
+  # DMA1_CCR3
+  # Circular buffer, High priority
+  # Set last for DMA
+  set {int} 0x40020030= 0x000030a1
+
+  # ENABLE TIM4
+  # display/x "TIM4_CR1", *0x40000800
+  set {int} 0x40000800 = 1
+  # display/x "TIM4_SR ", *0x40000810
+  set {int} 0x40000810= 0x1f
+  # display/x "CCMR_IN1", *0x40000818
+  set {int} 0x40000818 = 0x30
+  # Set CCER
+  set {int} 0x40000820 = 0x1
+  # display/x "TIM4_ARR", *0x4000042c
+  set {int} 0x4000042c = 0xb
+
+  # ENABLE USART3
+  # FullREMAP USART3 and Full remap TIM4
+  set{int} 0x40010004 = 0x1830
+
+  #USART3_CR1 configure but don't start
+  #set {int}0x4000480c= 0x140c
+
+  # ENABLE GPIOB
+  #Turn on GPIOB clock
+  set {int}0x40021018 = *0x40021018 | 0b1000
+  #GPIOB_low
+  set {int}0x40010c00 = 0x44b84222
+  #GPIOB IDR
+  set {int}0x40010c08=0xffd0
+  #GPIOB ODR
+  set {int}0x40010c0c=0x10
+
+  # ENABLE GPIOD
+  # Turn on GPIOD clock d
+  set {int}0x40021018 = *0x40021018 | 0b100000
+  # GPIOD ODR
+  #set {int}0x4001140c= 0xe0
+  # GPIOD IDR
+  #set {int}0x40011408= 0x7ffb
+  # GPIOD Config_HIGHBITS
+  #set {int}0x40011404= 0x422a444b
+
+  #Enable GPIOA
+  # Turn on GPIOA clock
+end
+
   From the STM32 F103 Manual.
 
 1. Enable the USART by writing the UE bit in USART_CR1 register to 1.
@@ -903,27 +1001,60 @@ place. Configure the DMA register as explained in multibuffer communication.
 5. Select the desired baud rate using the USART_BRR register.
 */
 // 40004800 STATUS REGISTER FOR USART3
-uint32_t * USART3_CR1 = (uint32_t *) 0x4000480c;
-uint32_t * USART3_CR2 = (uint32_t *) 0x40004810;
-uint32_t * USART3_CR3 = (uint32_t *) 0x40004814;
-uint32_t * USART3_BAUD= (uint32_t *) 0x40004808;
-*USART3_CR1  = 0x0000340c;
-*USART3_CR2 = 0;
-*USART3_CR3 = 0x40;
-*USART3_BAUD= 0x34;
 
-// Now for DMA stuff.
+/*
 
+#USART3_CR1
+set {int}0x4000480c= 0b10000000000000
+shell sleep .001
+# M bit
+set {int}0x4000480c |= 0b1000000000000
+#USART3_CR3 DMA enable
+set {int}0x40004814= 0x40
+shell sleep .001
+#USART_BAUD
+set{int} 0x40004808 = 0x34
+shell sleep .001
+#USART enable TE and RE
+set {int}0x4000480c |= 0x40c
+# GPIOD Config_HIGHBITS
+set {int}0x40011404= 0x422a444b
+shell sleep .001
+# GPIOD ODR
+set {int}0x4001140c= 0x20fc
+# GPIOD IDR
+set {int}0x40011408= 0xbfff
 
+*/
+
+// Enable DMA between USART3 and RAM
+// So note values will be instantly recorded in circular buffers.
 uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
 uint32_t * DMA1_CPAR = (uint32_t *)   0x40020038;
 uint32_t * DMA1_CMAR = (uint32_t *)   0x4002003c;
 uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
 *DMA1_CPAR = 0x40004804;
 *DMA1_CMAR = 0x20001a86; // Some spot in ram is dest.
-*DMA1_CNDTR = 0xFF;
+*DMA1_CNDTR = 0x100;
 // Circular buffer, high priority.
 *DMA1_CCR3 = 0x000030a1; // Must be inited last.
+
+uint32_t * USART3_CR1 = (uint32_t *) 0x4000480c;
+uint32_t * USART3_CR2 = (uint32_t *) 0x40004810;
+uint32_t * USART3_CR3 = (uint32_t *) 0x40004814;
+uint32_t * USART3_BAUD= (uint32_t *) 0x40004808;
+*USART3_CR1  = 0b10000000000000;
+delay(1);
+*USART3_CR1 |= 0b1000000000000;
+*USART3_CR3 |= 0x40;
+*USART3_CR2 = 0;
+*USART3_BAUD= 0x34;
+delay(1);
+*USART3_CR1   = 0x340c;
+delay(1);
+GPIOD -> CRH = 0x422a444b;
+GPIOD -> BSRR= 0x20fc;
+
 return;
 }
 
@@ -946,12 +1077,15 @@ int main(void) {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,  ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,  ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC,  ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
 
    // The three things you need to do to hook up Tim3_ch2
    // PortB5 output. Where the LCD potentiometer is connected.
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;    // output push-pull mode

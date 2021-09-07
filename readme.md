@@ -694,11 +694,20 @@ It appears DMA is configured to echo these messages to RAM. There's some kind
 of message passing to the keybed to get it to work, but
 
 Successful keyboard start sequence in GDB.
+
+First, set a break at tb *0x080131d4. Then monitor reset halt. Then the below
+will work.
+
+Breaking earlier at tb *0x080132e2 also seems to work.
+
+There's some values being stored, so you need to let the OS run a full cycle and
+restart to really confirm a technique works.
 ```
 define TurnOnKeyboard
   # SET CLOCKS
   # RCC_CNFGR
-  set {int} 0x40021004 = 0x11440a
+  #set {int} 0x40021004 = 0x11440a
+  set {int} 0x40021004 = 0x51440a
   # RCC_CR
   set {int} 0x40021000 = 0x3035583
 
@@ -711,8 +720,8 @@ define TurnOnKeyboard
   # Enable TIM4 Clock
   # RCC_APB1ENR bit 2
   set {int}0x4002101c= *0x4002101c | (1 << 2)
-  # Clock AFIO_MAPR
-  set {int}0x40021018 = 0x407d
+  # Clock AFIO_MAPR, and clock USART1, GPIOs
+  set {int}0x40021018 = 0x427d
   # Correct Vals for RCC_CFGR
 
   # ENABLE DMA1
@@ -742,12 +751,9 @@ define TurnOnKeyboard
   # ENABLE USART3
   # FullREMAP USART3 and Full remap TIM4
   set{int} 0x40010004 = 0x1830
-  #USART_BAUD
-  set{int} 0x40004808 = 0x34
-  #USART3_CR1
-  set {int}0x4000480c= 0x340c
-  #USART3_CR3
-  set {int}0x40004814= 0x40
+
+  #USART3_CR1 configure but don't start
+  #set {int}0x4000480c= 0x140c
 
   # ENABLE GPIOB
   #Turn on GPIOB clock
@@ -763,14 +769,86 @@ define TurnOnKeyboard
   # Turn on GPIOD clock d
   set {int}0x40021018 = *0x40021018 | 0b100000
   # GPIOD ODR
-  set {int}0x4001140c= 0x60e0
+  #set {int}0x4001140c= 0xe0
   # GPIOD IDR
-  set {int}0x40011408= 0x7ffb
+  #set {int}0x40011408= 0x7ffb
   # GPIOD Config_HIGHBITS
-  set {int}0x40011404= 0x422a444b
+  #set {int}0x40011404= 0x422a444b
+
+  #Enable GPIOA
+  # Turn on GPIOA clock
 end
 ```
 
+```
+define rest
+  #USART3_CR1
+  set {int}0x4000480c= 0x340c
+  #USART_BAUD
+  set{int} 0x40004808 = 0x34
+  #USART3_CR3
+  set {int}0x40004814= 0x40
+
+
+  # GPIOD ODR
+  set {int}0x4001140c= 0x60e0
+  # GPIOD IDR
+ set {int}0x40011408= 0x7ffb
+  # GPIOD Config_HIGHBITS
+  set {int}0x40011404= 0x222a444b
+end
+```
+
+```
+define rest
+  #USART3_CR1
+  set {int}0x4000480c= 0b10000000000000
+  shell sleep .001
+  # M bit
+  set {int}0x4000480c |= 0b1000000000000
+  #USART3_CR3 DMA enable
+  set {int}0x40004814= 0x40
+  shell sleep .001
+  #USART_BAUD
+  set{int} 0x40004808 = 0x34
+  shell sleep .001
+  #USART enable TE and RE
+  set {int}0x4000480c |= 0x40c
+
+  # GPIOD Config_HIGHBITS
+  set {int}0x40011404= 0x222a444b
+  shell sleep .001
+  # GPIOD ODR
+  set {int}0x4001140c= 0x60e0
+  # GPIOD IDR
+  set {int}0x40011408= 0x7ffb
+end
+```
+
+```
+define sec
+  #USART3_CR1
+  set {int}0x4000480c= 0b10000000000000
+  shell sleep .001
+  # M bit
+  set {int}0x4000480c |= 0b1000000000000
+  #USART3_CR3 DMA enable
+  set {int}0x40004814= 0x40
+  shell sleep .001
+  #USART_BAUD
+  set{int} 0x40004808 = 0x34
+  shell sleep .001
+  #USART enable TE and RE
+  set {int}0x4000480c |= 0x40c
+  # GPIOD Config_HIGHBITS
+  set {int}0x40011404= 0x422a444b
+  shell sleep .001
+  # GPIOD ODR
+  set {int}0x4001140c= 0x20fc
+  # GPIOD IDR
+  set {int}0x40011408= 0xbfff
+end
+```
 Variables of interest to monitor:
 ```
 display/32xw 0x20001a86
@@ -785,9 +863,10 @@ display/x "USART_BAUD", *0x40004808
 display/x "USART3_CR3",   *0x40004814
 display/x "USART3_SR", *0x40004800
 display/x "DMA1_CPAR", *0x40020038
-display/x "AFIO_MAPR", *0x40010004
+display/x "DMA1_CCR3", *0x40020030
 display/x "DMA_ifcr", *0x40020004
 display/x "DMA_isr", *0x40020000
+display/x "AFIO_MAPR", *0x40010004
 display/x "APB2Enr", *0x40021018
 display/x "RCC_CR   ", *0x40021000
 display/x "RCC_CNFGR", *0x40021004
