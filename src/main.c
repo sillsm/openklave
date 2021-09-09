@@ -51,15 +51,17 @@ void LCDToWires2(bitfield b){
 
   // Twiddle only the first 8 bits. So send ~ of the 8
   // to the upper register of BSRR.
-  uint32_t controlmask = 0b00000000000000000000000000000011;
-  GPIOB->BSRR = controlbits | (~controlbits & controlmask) << 16;
+  uint32_t controlmask = 0b00000000000000000000000000000110;
+  //GPIOB->BSRR = controlbits | (~controlbits & controlmask) << 16;
+  GPIOB -> ODR = controlbits;
 
   // Port C0-7 does the data stuff.
   uint32_t databits = b.field&0b0011111111;
 
   uint32_t datamask = 0b00000000000000000000000011111111;
 //  x | ((~x & datamask) << 16)
-  GPIOC->BSRR = databits | (~databits & datamask) << 16;
+  //GPIOC->BSRR = databits | (~databits & datamask) << 16;
+  GPIOC -> ODR = databits;
   // Send the clock pulse to make the LCD process the instruction.
   lcdpulse();
 }
@@ -95,6 +97,23 @@ void writeChar (char c){
   bitfield b = BITFIELD10(1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   b.field = b.field | c;
   LCDToWires2(b);
+}
+/*
+void _writeScreen(char*s){
+  // entire screen state kept as a local variable.
+  static char screenState[80]= {0};
+  // update screenState here
+
+  // Rewrite screen here
+  for (int i = 0; i<80; i++) {
+
+  }
+}*/
+
+void clearScreen(){
+  bitfield clear      = BITFIELD10(0,0,0,0,0,0,0,0,0,1);
+  LCDToWires2(clear);
+  delay(2);
 }
 
 void contrast(){
@@ -616,6 +635,29 @@ void usbReset(void){
     b->count_rx = 0x00001000;
 }
 
+void writeNumberToScreen(uint32_t u){
+  clearScreen();
+  delay(4);
+  char a = (u&0x0000000F) >> 0;
+  char b = (u&0x000000F0) >> 4;
+  char c = (u&0x00000F00) >> 8;
+  char d = (u&0x0000F000) >> 12;
+  char e = (u&0x000F0000) >> 16;
+  char f = (u&0x00F00000) >> 20;
+  char g = (u&0x0F000000) >> 24;
+  char h = (u&0xF0000000) >> 28;
+  char s[8]= {h,g,f,e,d,c,b,a};
+
+  for (int i = 0; i<8; i++){
+    if (s[i] < 0xA) {
+      writeChar(s[i]+48);
+      continue;
+    }
+    writeChar(s[i]+55);
+  }
+
+}
+
 // Test function to move mouse to the right
 void usb_ep1(){
   int notes[]= {60, 64, 67, 59, 62, 67};
@@ -633,6 +675,18 @@ void usb_ep1(){
     b->count_tx= 0; // Transmit nothing.
     SetRegister(USB_EP1R, setEndpointState(state));
     return;
+  }
+
+  uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
+  // KeyOffset is actually DMA circular buffer offset.
+  uint32_t * KeyOffset        = (uint32_t *)0x40020034;
+  static uint32_t KeyBufferOffset = 0x100;
+  uint32_t event = *(BaseKeybedEvents + (0x100 - (*KeyOffset) - 4)/4);
+  //event = *BaseKeybedEvents;
+
+  if (*KeyOffset != KeyBufferOffset){
+    writeNumberToScreen(event);
+    KeyBufferOffset = *KeyOffset;
   }
 
   // 144 120 100
