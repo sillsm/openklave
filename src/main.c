@@ -396,7 +396,7 @@ static constexpr uint8_t USBMidiOneOutConfig[] = {
   		0x1, // bEndpointAddress OUT endpoint number 1
   		3,   //  bmAttributes: 3:Interrupt endpoint 2:Bulk, see note above.
   		8, 0,// wMaxPacketSize  = 8 bytes
-  		5, // bInterval Interrupt polling interval in ms
+  		1, // bInterval Interrupt polling interval in ms
   		0,   // bRefresh
   		0,   // bSyncAddress
 
@@ -658,18 +658,48 @@ void writeNumberToScreen(uint32_t u){
 
 }
 
-// Test function to move mouse to the right
+int decodeMPK249NoteValue(uint32_t u){
+  // magic number map. The reported value of the note
+  // from the keybed
+  // is remapped to the midi value around middle c. 0
+  // is the failure mode.
+  int map[] = {0, 0, 0, 0, 0, 0, 0, 0, 56, 57, 58, 59, 60,      //  0   - C
+               61, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0,           //  D   - 0x18
+                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 36,          // 0x19 - 0x24
+                37,  38, 39, 64, 65, 66, 67, 68, 69, 70, 71, 0, // 0x25 - 0x30
+                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0,           // 0x31 - 0x3C
+                0,  0, 0, 40, 41, 42, 43, 44, 45, 46,  47, 72,  // 0x3D - 0x48
+                73, 74, 75, 76, 77, 78, 79, 0, 0, 0,  0, 0,     // 0x49 - 0x54
+                0, 0,  0  , 0, 0, 0, 0, 0, 0, 0,  0, 48,        // 0x54 - 0x60
+                49, 50,51 , 52, 53, 54, 55, 78, 79, 80, 81, 82,// 0x61 - 0x6C
+              };
+  return map[(int)(u&0x0000FF00)>>8];
+}
+
+// Basic notes from keybed to usbmidi.
 void usb_ep1(){
-  int notes[]= {60, 64, 67, 59, 62, 67};
-  static int note = 0;
+  // This is helpful in understanding MIDI 1.0 UMP
+  // https://imitone.com/midi2/
   // clear interrupts
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
   USB->ISTR = 0;
 
-  static int i = 0;
-  i++;
-  if ((i%2) != 0){
+  // This algorithm is wrong and needs a write up.
+  // Max(TODO) 1. Make sure if you're about to go over you account for it
+  // 2. catch up on missed notes and transmit them.
+  static uint32_t KeyBufferOffset = 0x100;
+  uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
+  // KeyOffset is actually DMA circular buffer offset.
+  uint32_t * KeyOffset        = (uint32_t *)0x40020034;
+  uint32_t event = *(BaseKeybedEvents + (0x100 - (*KeyOffset & 0xFF) - 4)/4);
+  // if you're at 100 you want the end of the buffer
+  //event = *BaseKeybedEvents;
+
+  if (*KeyOffset != KeyBufferOffset){
+    //writeNumberToScreen(event);
+    KeyBufferOffset = *KeyOffset;
+  } else { // no update to note buffer, so no usb data to transmit
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -677,29 +707,23 @@ void usb_ep1(){
     return;
   }
 
-  uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
-  // KeyOffset is actually DMA circular buffer offset.
-  uint32_t * KeyOffset        = (uint32_t *)0x40020034;
-  static uint32_t KeyBufferOffset = 0x100;
-  uint32_t event = *(BaseKeybedEvents + (0x100 - (*KeyOffset) - 4)/4);
-  //event = *BaseKeybedEvents;
-
-  if (*KeyOffset != KeyBufferOffset){
-    writeNumberToScreen(event);
-    KeyBufferOffset = *KeyOffset;
-  }
+  // UMP
 
   // 144 120 100
+  // FE is up
   uint32_t * PMAWrite = (uint32_t *)0x40006060;
-  *PMAWrite = 121 | (144 << 8); // Chan 1 Note on
+  uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
+  // If it's a key release event
+  if ((event & 0x000000FF) == 0xFE){
+    noteChannel = 121 | (128 << 8);// Note on, Channel 1, M type 0x2, group 0
+  }
+
+  *PMAWrite= noteChannel;
   PMAWrite++;
-  //*PMAWrite = 120; // note 120
-  //PMAWrite++;
-  *PMAWrite = (notes[note%6] + (note/6)) | (100 << 8); // note velocity
+  *PMAWrite =  (decodeMPK249NoteValue(event))| 99 << 8 ; // Note val, velocity
   btable * b = (btable *) 0x40006010;
-  b->count_tx= 3;
+  b->count_tx= 4;
   SetRegister(USB_EP1R, setEndpointState(state));
-  note++;
   return;
 }
 
@@ -964,123 +988,6 @@ void USARTSetup(){
   *TIM4_CCER = 1;
   *TIM4_ARR = 0xb;
 
-  /*
-  # SET CLOCKS
-  # RCC_CNFGR
-  set {int} 0x40021004 = 0x11440a
-  # RCC_CR
-  set {int} 0x40021000 = 0x3035583
-
-  # Enable DMA1 Clock
-  # RCC->AHBENR = 1
-  set {int}0x40021014= *0x40021014 | 1
-  # Enable USART3 Clock
-  # RCC_APB1ENR bit 18
-  set {int}0x4002101c= *0x4002101c | (1 << 18)
-  # Enable TIM4 Clock
-  # RCC_APB1ENR bit 2
-  set {int}0x4002101c= *0x4002101c | (1 << 2)
-  # Clock AFIO_MAPR, and clock USART1, GPIOs
-  set {int}0x40021018 = 0x427d
-  # Correct Vals for RCC_CFGR
-
-  # ENABLE DMA1
-  # Set CPAR to USART3_DR
-  set {int} 0x40020038= 0x40004804
-  # Set CMAR to spot in RAM
-  set {int} 0x4002003c= 0x20001a86
-  # Set CNDR (buffer length)
-  set {int}0x40020034=0x100
-  # DMA1_CCR3
-  # Circular buffer, High priority
-  # Set last for DMA
-  set {int} 0x40020030= 0x000030a1
-
-  # ENABLE TIM4
-  # display/x "TIM4_CR1", *0x40000800
-  set {int} 0x40000800 = 1
-  # display/x "TIM4_SR ", *0x40000810
-  set {int} 0x40000810= 0x1f
-  # display/x "CCMR_IN1", *0x40000818
-  set {int} 0x40000818 = 0x30
-  # Set CCER
-  set {int} 0x40000820 = 0x1
-  # display/x "TIM4_ARR", *0x4000042c
-  set {int} 0x4000042c = 0xb
-
-  # ENABLE USART3
-  # FullREMAP USART3 and Full remap TIM4
-  set{int} 0x40010004 = 0x1830
-
-  #USART3_CR1 configure but don't start
-  #set {int}0x4000480c= 0x140c
-
-  # ENABLE GPIOB
-  #Turn on GPIOB clock
-  set {int}0x40021018 = *0x40021018 | 0b1000
-  #GPIOB_low
-  set {int}0x40010c00 = 0x44b84222
-  #GPIOB IDR
-  set {int}0x40010c08=0xffd0
-  #GPIOB ODR
-  set {int}0x40010c0c=0x10
-
-  # ENABLE GPIOD
-  # Turn on GPIOD clock d
-  set {int}0x40021018 = *0x40021018 | 0b100000
-  # GPIOD ODR
-  #set {int}0x4001140c= 0xe0
-  # GPIOD IDR
-  #set {int}0x40011408= 0x7ffb
-  # GPIOD Config_HIGHBITS
-  #set {int}0x40011404= 0x422a444b
-
-  #Enable GPIOA
-  # Turn on GPIOA clock
-end
-
-  From the STM32 F103 Manual.
-
-1. Enable the USART by writing the UE bit in USART_CR1 register to 1.
-
-0x00000040
-
-40004814 is USART3_cr3
-What is UE bit.
-2. Program the M bit in USART_CR1 to define the word length.
-What is
-3. Program the number of stop bits in USART_CR2.
-4. Select DMA enable (DMAT) in USART_CR3 if Multi buffer Communication is to take
-place. Configure the DMA register as explained in multibuffer communication.
-5. Select the desired baud rate using the USART_BRR register.
-*/
-// 40004800 STATUS REGISTER FOR USART3
-
-/*
-
-#USART3_CR1
-set {int}0x4000480c= 0b10000000000000
-shell sleep .001
-# M bit
-set {int}0x4000480c |= 0b1000000000000
-#USART3_CR3 DMA enable
-set {int}0x40004814= 0x40
-shell sleep .001
-#USART_BAUD
-set{int} 0x40004808 = 0x34
-shell sleep .001
-#USART enable TE and RE
-set {int}0x4000480c |= 0x40c
-# GPIOD Config_HIGHBITS
-set {int}0x40011404= 0x422a444b
-shell sleep .001
-# GPIOD ODR
-set {int}0x4001140c= 0x20fc
-# GPIOD IDR
-set {int}0x40011408= 0xbfff
-
-*/
-
 // Enable DMA between USART3 and RAM
 // So note values will be instantly recorded in circular buffers.
 uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
@@ -1167,7 +1074,7 @@ int main(void) {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  OPEN Kave  ");
+    writeString((char*)"  OPEN Drlave  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;

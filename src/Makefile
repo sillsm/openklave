@@ -55,4 +55,11 @@ clean:
 
 # flash
 burn:
-	sudo $(ST_FLASH) write $(PROJECT).bin 0x8000000
+	clear
+	echo "Please make sure you have turned off the device and\n"
+	echo "turned it back on with the Push To Enter knob held down."
+	python ../util/wipe_os.py
+	sleep 5
+	ls -lh $(PROJECT).syx
+	python ../util/flash_os.py --no-prompt $(PROJECT).syx
+	echo "Device sucessfully flashed, please restart it.\n\n"
