@@ -965,16 +965,6 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 
 void USARTSetup(){
 
-  // Set up system clocks.
-  //uint32_t * RCC_CNFGR = (uint32_t *) 0x40021004;
-  //  uint32_t * RCC_CR    = (uint32_t *) 0x40021000;
-
-  // Make sure PLL is disabled before you try to write
-  // config values. See p. 102 in manual.
-  //*RCC_CR    = 0;
-  //*RCC_CNFGR = 0x11440a;
-  //*RCC_CR    = 0x3035583;
-
   // Set up TIM4
   uint32_t * TIM4_CR1 = (uint32_t *) 0x40000800;
   uint32_t * TIM4_SR  = (uint32_t *) 0x40000810;
