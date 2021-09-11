@@ -396,7 +396,7 @@ static constexpr uint8_t USBMidiOneOutConfig[] = {
   		0x1, // bEndpointAddress OUT endpoint number 1
   		3,   //  bmAttributes: 3:Interrupt endpoint 2:Bulk, see note above.
   		8, 0,// wMaxPacketSize  = 8 bytes
-  		1, // bInterval Interrupt polling interval in ms
+  		1,   // bInterval Interrupt polling interval in ms
   		0,   // bRefresh
   		0,   // bSyncAddress
 
@@ -414,7 +414,7 @@ static constexpr uint8_t USBMidiOneOutConfig[] = {
   		0x81, // IN address.
   		3,    // bmAttributes: 3: Interrupt endpoint 2: Bulk, see note above.
   		8, 0, // wMaxPacketSize
-  		10,   // bInterval in ms
+  		1,    // bInterval in ms
   		0,    // bRefresh
   		0,    // bSyncAddress
 
@@ -658,12 +658,12 @@ void writeNumberToScreen(uint32_t u){
 
 }
 
-int decodeMPK249NoteValue(uint32_t u){
+unsigned int decodeMPK249NoteValue(uint32_t u){
   // magic number map. The reported value of the note
   // from the keybed
   // is remapped to the midi value around middle c. 0
   // is the failure mode.
-  int map[] = {0, 0, 0, 0, 0, 0, 0, 0, 56, 57, 58, 59, 60,      //  0   - C
+  unsigned int map[] = {0, 0, 0, 0, 0, 0, 0, 0, 56, 57, 58, 59, 60,      //  0   - C
                61, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0,           //  D   - 0x18
                 0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 36,          // 0x19 - 0x24
                 37,  38, 39, 64, 65, 66, 67, 68, 69, 70, 71, 0, // 0x25 - 0x30
@@ -673,7 +673,8 @@ int decodeMPK249NoteValue(uint32_t u){
                 0, 0,  0  , 0, 0, 0, 0, 0, 0, 0,  0, 48,        // 0x54 - 0x60
                 49, 50,51 , 52, 53, 54, 55, 78, 79, 80, 81, 82,// 0x61 - 0x6C
               };
-  return map[(int)(u&0x0000FF00)>>8];
+  unsigned int re = map[(u&0x0000FF00)>>8];
+  return re;
 }
 
 // Basic notes from keybed to usbmidi.
@@ -681,32 +682,53 @@ void usb_ep1(){
   // This is helpful in understanding MIDI 1.0 UMP
   // https://imitone.com/midi2/
   // clear interrupts
+
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
-  USB->ISTR = 0;
 
+  static int count = 0;
   // This algorithm is wrong and needs a write up.
   // Max(TODO) 1. Make sure if you're about to go over you account for it
   // 2. catch up on missed notes and transmit them.
-  static uint32_t KeyBufferOffset = 0x100;
+
   uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
   // KeyOffset is actually DMA circular buffer offset.
   uint32_t * KeyOffset        = (uint32_t *)0x40020034;
-  uint32_t event = *(BaseKeybedEvents + (0x100 - (*KeyOffset & 0xFF) - 4)/4);
-  // if you're at 100 you want the end of the buffer
-  //event = *BaseKeybedEvents;
+  static uint32_t KeyBufferOffset = 0x100;
 
-  if (*KeyOffset != KeyBufferOffset){
-    //writeNumberToScreen(event);
-    KeyBufferOffset = *KeyOffset;
-  } else { // no update to note buffer, so no usb data to transmit
+  // Bail if
+  // 1) No new notes have been played since we last checked OR
+  // 2) DMA is in the middle of note transmission so we're getting a non multiple
+  // of 4 byte count.
+  if (((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff)) | ((*KeyOffset % 4) != 0)  ){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
+    // Clear interrupts.
+    USB->ISTR = 0;
     SetRegister(USB_EP1R, setEndpointState(state));
     return;
   }
+  // So a new note has been played.
 
+  // Keybuffer should try decrementing by one frame until it matches KeyOffset.
+  KeyBufferOffset= (KeyBufferOffset - 4) % 0x100;
+  uint32_t event = *(BaseKeybedEvents + (0x100 - KeyBufferOffset - 4)/4);
+  unsigned int val = (decodeMPK249NoteValue(event));
+
+  int debug = 0;
+  static uint32_t * DEBUG  = (uint32_t *)0x20005000;
+  if (debug){
+    *DEBUG = count;
+    DEBUG++;
+    *DEBUG =event;
+    DEBUG++;
+    *DEBUG = *KeyOffset;
+    DEBUG++;
+    *DEBUG = KeyBufferOffset;
+    DEBUG++;
+    count++;
+  }
   // UMP
 
   // 144 120 100
@@ -720,10 +742,15 @@ void usb_ep1(){
 
   *PMAWrite= noteChannel;
   PMAWrite++;
-  *PMAWrite =  (decodeMPK249NoteValue(event))| 99 << 8 ; // Note val, velocity
+
+  int velocity = 99;
+  *PMAWrite =  val | velocity << 8 ; // Note val, velocity
+
   btable * b = (btable *) 0x40006010;
   b->count_tx= 4;
+  USB->ISTR = 0;
   SetRegister(USB_EP1R, setEndpointState(state));
+  // Clear interrupts.
   return;
 }
 
@@ -745,6 +772,9 @@ void usb(){
   // forward them along.
   if ((USB->ISTR &0b1111) == 1 ){
     usb_ep1();
+    //uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
+    //USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
+    //SetRegister(USB_EP1R, setEndpointState(state));
     return;
   }
 
@@ -1064,7 +1094,7 @@ int main(void) {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  OPEN Drlave  ");
+    writeString((char*)"  I <3 Heidi  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;
