@@ -878,3 +878,99 @@ display/x "TIM4_CR1", *0x40000800
 display/x "TIM4_SR ", *0x40000810
 display/x "CCMR_IN1", *0x40000818
 ```
+
+## Getting signals from the pads, faders, knobs and buttons.
+
+Here is a proof of concept. ADC1 reads analog voltage values
+and is demuxed by values in GPIOE. ADC1 reads are mapped via DMA to RAM.
+So you periodically twiddle GPIOE, make sure more than a threshold voltage has
+changed, then convert that to a midi signal and shove over USB.
+
+```
+define PadPOC
+  # SET CLOCKS
+  # RCC_CNFGR
+  set {int} 0x40021004 = 0x11440a
+  # RCC_CR
+  set {int} 0x40021000 = 0x3035583
+
+  # Enable DMA1 Clock
+  # RCC->AHBENR = 1
+  set {int}0x40021014= *0x40021014 | 1
+  # Clock RCC_APB2ENR
+  # This includes ADC1 and GPIOE
+  set {int}0x40021018 = 0x427d
+
+  # GPIOE_Config_Low"
+  set {int}0x40011800 = 0x22222222
+  # GPIOE_Config_High
+  set {int}0x40011804 = 0x22224248
+  # GPIOE_Data_out, this demuxes the ADC1 sampler, takes
+  # a variety of values to fully sample all buttons.
+  set {int}0x4001180c = 0x513a
+
+  # ADC1
+  # ADC1_SR
+  set{int}0x40012400 = 0x10
+  # ADC1_CR1
+  set{int}0x40012404 = 0x100
+  # ADC1_CR2
+  set{int} 0x40012408 = 0x1e0103
+  # SMPR2
+  set{int}0x40012410  = 0x006db6db
+  # Watchdog high
+  set{int}0x40012424  = 0xfff
+  # SQR1
+  set{int}0x4001242c  = 0x00700000
+  # SQR2
+  set{int}0x40012430  = 0xe6
+  # SQR3
+  set{int}0x40012434  = 0x0a418820
+  # To get ADC1_CR2 to software trigger
+  set{int} 0x40012408 = 0x5E0103
+
+  #DMA
+  #Buffer size
+  set{int}0x4002000c    = 0x10
+  #CPAR
+  set{int}0x40020010  = 0x4001244c
+  #CMAR
+  set{int}0x40020014  = 0x20002c96
+  #DMA_CCR1
+  set{int} 0x40020008 = 0x25a1
+
+end
+```
+
+Relevant variables to watch
+
+```
+display/x "ADC1_SR",  *0x40012400
+display/x "ADC1_CR1", *0x40012404
+display/x "ADC1_CR2", *0x40012408
+display/x "ADC1_Dat", *0x4001244c
+display/x "DMA_CCR1", *0x40020008
+display/x "ADC_Pick", *0x20000c09
+display/8xw  "ADC1 DMA", 0x20002c96
+display/x $r0
+display/x $r1
+display/x "GPIOE_Config_Low", *0x40011800
+display/x "GPIOE_Config_High",*0x40011804
+display/x "GPIOE_Data_out",   *0x4001180c
+```
+
+## Changing Pad colors and button LEDs
+SPI2 eat pad and button color/light data. You map DMA to SPI2, change
+the data direction so RAM writes to peripheral. Then you write a sequence
+of commands in the correct RAM spot, and you pulse GPIOB like this to
+commit the data to a light value.
+
+You can also read color changes from SPI2, but not sure if that's relevant
+for our OS yet.
+
+```
+# Then GPIOB Pulse to send in the clowns
+set{int}0x40010c0c = 0x810
+#pulse
+set{int}0x40010c0c = 0x1810
+```
