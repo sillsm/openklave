@@ -677,6 +677,145 @@ unsigned int decodeMPK249NoteValue(uint32_t u){
   return re;
 }
 
+// Struct that holds values for upper part of keyboard
+typedef struct buttons{
+    uint32_t Pads[16];
+    // Modification flag
+    uint32_t PadsToModify;
+    // Which Pads are "on" bitfield
+    uint32_t WhichPadsAreOn;
+    // Faders
+    uint32_t Fader1;
+    uint32_t Fader2;
+    uint32_t Fader3;
+    uint32_t Fader4;
+    uint32_t Fader5;
+    uint32_t Fader6;
+    uint32_t Fader7;
+    uint32_t Fader8;
+    //Knobs
+    uint32_t Knob1;
+    uint32_t Knob2;
+    uint32_t Knob3;
+    uint32_t Knob4;
+    uint32_t Knob5;
+    uint32_t Knob6;
+    uint32_t Knob7;
+    uint32_t Knob8;
+    // Wheels
+    uint32_t PitchWheel;
+    uint32_t ModWheel;
+} Buttons;
+
+ // We need to just hope? that 0x20004000 et. seq. has storage space
+ // for our keyboard. We should probably do something in the linker
+ // to make this explicit.
+ Buttons * KeyboardButtons = (Buttons *) 0x20001000;
+
+// Test this.
+// This very dangerous function manipulates the global
+// KeyboardButtons pointer object.
+//
+void CompareAndSetPad(int Pad, uint16_t valToCompare){
+  // First, we shift the Pad's current value 16 bits to the left.
+  uint32_t lastMeasuredValue= (KeyboardButtons->Pads[Pad])&0xFFFF;
+  KeyboardButtons->Pads[Pad] = (lastMeasuredValue<<16) | valToCompare;
+  // compute their difference and set a modification bit if the difference
+  // is too big. We use XOR as a proxy for Abs(a-b)
+  if ((lastMeasuredValue ^ valToCompare) > 2){
+    KeyboardButtons -> PadsToModify |= (1<<Pad);
+  }
+
+  // If a pad is on but it's at 0, flag to turn it off.
+  if ((KeyboardButtons->WhichPadsAreOn & (1 << Pad)) && (valToCompare == 0)){
+    KeyboardButtons -> PadsToModify |= (1<<Pad);
+  }
+  return;
+}
+
+// Gets called after every ADC1 conversion event is complete.
+//extern "C"{
+ //void ADC1_2_IRQHandler(){
+ void PadChecker(){
+   int debug = 0;
+   static uint32_t * DEBUG  = (uint32_t *)0x20005000;
+   if (debug){
+     *DEBUG = 11;
+     DEBUG++;
+   }
+   static int whichSweep = 0;
+   // reset which buttons need modification
+   //KeyboardButtons -> PadsToModify = 0;
+   uint16_t * ADCBase = (uint16_t *) 0x20002c96;
+
+   uint16_t * pada = ADCBase;
+   uint16_t * padb = ADCBase + 1;
+   uint16_t * padc = ADCBase + 2;
+   uint16_t * padd = ADCBase + 3;
+   // we sample voltages via ADC.
+   // we demux by selecting other ODR values.
+   uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
+
+   volatile int wait = 2000;
+   if (whichSweep == 0){
+
+     //*GPIOE_ODR = 0x515b;
+     //*GPIOE_ODR = 0x517b;
+     *GPIOE_ODR = 0x1157;
+     while (wait-- > 0) {
+         __asm("nop");
+     }
+     //if (*pada
+     CompareAndSetPad(12, *pada);
+     CompareAndSetPad(13, *padb);
+     CompareAndSetPad(14, *padc);
+     CompareAndSetPad(15, *padd);
+     whichSweep++;
+     return;
+   }
+   if (whichSweep == 1){
+   // Switch and wait 20 clock cycles.
+     *GPIOE_ODR = 0x114b;
+     while (wait-- > 0) {
+         __asm("nop");
+     }
+     CompareAndSetPad(8, *pada);
+     CompareAndSetPad(9, *padb);
+     CompareAndSetPad(10, *padc);
+     CompareAndSetPad(11, *padd);
+     whichSweep++;
+     return;
+   }
+   if (whichSweep == 2){
+   // Switch and wait 20 clock cycles.
+     *GPIOE_ODR = 0x110d;
+     while (wait-- > 0) {
+         __asm("nop");
+     }
+     CompareAndSetPad(4, *pada);
+     CompareAndSetPad(5, *padb);
+     CompareAndSetPad(6, *padc);
+     CompareAndSetPad(7, *padd);
+     whichSweep++;
+     return;
+   }
+   // Switch and wait 20 clock cycles.
+   if (whichSweep == 3){
+     *GPIOE_ODR = 0x111e;
+     while (wait-- > 0) {
+         __asm("nop");
+     }
+     CompareAndSetPad(0, *pada);
+     CompareAndSetPad(1, *padb);
+     CompareAndSetPad(2, *padc);
+     CompareAndSetPad(3, *padd);
+     whichSweep = 0;
+     return;
+   }
+   return;
+ }
+//}
+
 // Basic notes from keybed to usbmidi.
 void usb_ep1(){
   // This is helpful in understanding MIDI 1.0 UMP
@@ -696,11 +835,19 @@ void usb_ep1(){
   uint32_t * KeyOffset        = (uint32_t *)0x40020034;
   static uint32_t KeyBufferOffset = 0x100;
 
+  //Pollpads for an update.
+  PadChecker();
+
   // Bail if
   // 1) No new notes have been played since we last checked OR
   // 2) DMA is in the middle of note transmission so we're getting a non multiple
   // of 4 byte count.
-  if (((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff)) | ((*KeyOffset % 4) != 0)  ){
+  int noNewKeybedData = ((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff));
+  int keybedDataNotReady = ((*KeyOffset % 4) != 0);
+  int noUpperKeyboardData = (KeyboardButtons -> PadsToModify == 0) ;//&
+  //(KeyboardButtons -> WhichPadsAreOn == 0) ;
+
+  if ((noNewKeybedData & noUpperKeyboardData) | keybedDataNotReady){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -710,11 +857,74 @@ void usb_ep1(){
     return;
   }
   // So a new note has been played.
+  uint32_t event = 0;
+  unsigned int val=0;
+  int velocity = 99;
+  uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
+  //uint32_t noteChannel = 121 | (0b10100011 << 8);// Note aftertouch, Channel 1, M type 0x2, group 0
+  // Was it from the keybed?
+  if (!noNewKeybedData){
+    // Keybuffer should try decrementing by one frame until it matches KeyOffset.
+    KeyBufferOffset= (KeyBufferOffset - 4) % 0x100;
+    event = *(BaseKeybedEvents + (0x100 - KeyBufferOffset - 4)/4);
+    val = (decodeMPK249NoteValue(event));
+    // If it's a key release event
+    if ((event & 0x000000FF) == 0xFE){
+      noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
+    }
+  }
 
-  // Keybuffer should try decrementing by one frame until it matches KeyOffset.
-  KeyBufferOffset= (KeyBufferOffset - 4) % 0x100;
-  uint32_t event = *(BaseKeybedEvents + (0x100 - KeyBufferOffset - 4)/4);
-  unsigned int val = (decodeMPK249NoteValue(event));
+  // Was it a pad or a knob or slider?
+  if (noNewKeybedData && !noUpperKeyboardData){
+    velocity = 33;
+    int pad = 0;
+    // Note on, off, or channel pressure?
+    // If we see we need to modify a 0 val, turn pad off.
+    // If we're modifying something for the first time, on, and set on.
+    // Otherwise, if on is set and we see a val, channel pressure.
+
+    // Careful! The [i]th element is the 1 << ith bit
+    for (int i = 0; i < 16; i++){
+      pad = i;
+      
+      uint32_t mask = (1 << i);
+      // Turn of turned on notes with no value.
+      if ((mask & (KeyboardButtons -> WhichPadsAreOn)) &&
+      (((KeyboardButtons-> Pads[i])&0xFFF) == 0)){
+        // Pad says to Modify it but it has no val.
+        velocity = 3;
+        noteChannel = 121 | (0b10000001 << 8); // note off channel two.
+        KeyboardButtons -> WhichPadsAreOn = (~mask)&(KeyboardButtons -> WhichPadsAreOn);
+        KeyboardButtons -> PadsToModify &= ~mask;
+        break;
+      }
+
+      // You didn't shut it off.
+
+      if (mask & (KeyboardButtons -> PadsToModify)){
+        // Turn off modify bit.
+        KeyboardButtons -> PadsToModify = (~mask)&(KeyboardButtons -> PadsToModify);
+
+
+        velocity = 2;
+        // If pad not on, set and emit
+        if (!(mask & KeyboardButtons -> WhichPadsAreOn)) {
+          // the pad is currently off
+          velocity = 4;
+          noteChannel = 121 | (0b10010001 << 8); // note on.
+          KeyboardButtons -> WhichPadsAreOn |= mask;
+          break;
+        }
+        // polyphonic pressure
+        noteChannel = 121 | (0b10100001 << 8); // note on channel pressure.
+        velocity = ((KeyboardButtons-> Pads[i]) & 0xFFF)/2;
+        break;
+      }
+    }
+
+    val = 100 +pad;
+  }
+
 
   int debug = 0;
   static uint32_t * DEBUG  = (uint32_t *)0x20005000;
@@ -734,16 +944,11 @@ void usb_ep1(){
   // 144 120 100
   // FE is up
   uint32_t * PMAWrite = (uint32_t *)0x40006060;
-  uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
-  // If it's a key release event
-  if ((event & 0x000000FF) == 0xFE){
-    noteChannel = 121 | (128 << 8);// Note on, Channel 1, M type 0x2, group 0
-  }
 
   *PMAWrite= noteChannel;
   PMAWrite++;
 
-  int velocity = 99;
+
   *PMAWrite =  val | velocity << 8 ; // Note val, velocity
 
   btable * b = (btable *) 0x40006010;
@@ -993,6 +1198,8 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 
 }
 
+// USART Setup is to prepare USART
+// To register black and white key signals from the bottom of the keyboard.
 void USARTSetup(){
 
   // Set up TIM4
@@ -1010,10 +1217,13 @@ void USARTSetup(){
 
 // Enable DMA between USART3 and RAM
 // So note values will be instantly recorded in circular buffers.
+uint32_t * DMA1_IFCR = (uint32_t *)   0x40020004;
 uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
 uint32_t * DMA1_CPAR = (uint32_t *)   0x40020038;
 uint32_t * DMA1_CMAR = (uint32_t *)   0x4002003c;
 uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
+// Clear all DMA issues.
+*DMA1_IFCR = 0xFFFFFFFF;
 *DMA1_CPAR = 0x40004804;
 *DMA1_CMAR = 0x20001a86; // Some spot in ram is dest.
 *DMA1_CNDTR = 0x100;
@@ -1039,6 +1249,79 @@ GPIOD -> BSRR= 0x20fc;
 return;
 }
 
+// ADC is used to sample voltages for the top of the Keyboard.
+// to retrieve signals, including position of fader, knob, modulation
+// and pitch wheel.
+//
+// The voltages are multiplexed by the value in GPIOE_ODR.
+void ADCSetup(){
+  // Set Clock CONFIGURATION
+  // We expect this is done in USART Setup already.
+  // Set DMA1 clock.
+  // We expect this is done in USART Setup already.
+
+  // Configure ADC1 (analog to digital converter)
+  uint32_t * RCC_APB2ENR = (uint32_t *) 0x40021018;
+  *RCC_APB2ENR = 0x427d;
+
+  // Configure DMA1_1 to read off ADC1 values.
+  uint32_t * DMA1_CNDTR = (uint32_t *) 0x4002000c;
+  uint32_t * DMA1_CPAR = (uint32_t *) 0x40020010;
+  uint32_t * DMA1_CMAR = (uint32_t *) 0x40020014;
+  uint32_t * DMA_CCR1 = (uint32_t *) 0x40020008;
+
+  *DMA1_CNDTR = 0x10;
+  // Copy from ADC1
+  *DMA1_CPAR  = 0x4001244c;
+  // Copy to RAM
+  *DMA1_CMAR  = 0x20002c96;
+  // Circular buffer
+  *DMA_CCR1= 0x25a1;
+
+
+  uint32_t * ADC1_SR     = (uint32_t *) 0x40012400;
+  uint32_t * ADC1_CR1    = (uint32_t *) 0x40012404;
+  uint32_t * ADC1_CR2    = (uint32_t *) 0x40012408;
+  uint32_t * ADC1_SMP2   = (uint32_t *) 0x40012410;
+  uint32_t * ADC1_WatchH = (uint32_t *) 0x40012424;
+  uint32_t * ADC1_SQR1   = (uint32_t *) 0x4001242c;
+  uint32_t * ADC1_SQR2   = (uint32_t *) 0x40012430;
+  uint32_t * ADC1_SQR3   = (uint32_t *) 0x40012434;
+
+  *ADC1_SR =  0x10;
+  //*ADC1_CR1 = 0x100;
+  *ADC1_CR1 = 0x120; // Drive an interrupt at the end of each conversion.
+  *ADC1_CR2 = 0x1e0103;
+  *ADC1_SMP2= 0x006db6db;
+  *ADC1_WatchH= 0xfff;
+  *ADC1_SQR1 = 0x00700000;
+  *ADC1_SQR2 = 0xe6;
+  *ADC1_SQR3 = 0x0a418820;
+
+  // Software trigger to start ADC1.
+  delay(1);
+  *ADC1_CR2 = 0x5E0103;
+
+  // GPIOE to pick initial group.
+  uint32_t * GPIOE_CRL   = (uint32_t *)0x40011800;
+  uint32_t * GPIOE_CRH   = (uint32_t *)0x40011804;
+  uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
+
+  *GPIOE_CRL = 0x22222222;
+  *GPIOE_CRH = 0x22224248;
+  *GPIOE_ODR = 0x113a;
+
+  // Clear Keyboard state.
+  KeyboardButtons -> PadsToModify = 0;
+  KeyboardButtons -> WhichPadsAreOn=0;
+  uint32_t * clearRam  = (uint32_t *) KeyboardButtons;
+  for (int i = 0; i < 150; i++){
+    clearRam = 0;
+    clearRam++;
+  }
+  return;
+}
+
 // We put this include right before main.
 // So test code can reference the above declared code.
 #include "test_main.h"
@@ -1059,6 +1342,7 @@ int main(void) {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,  ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC,  ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE,  ENABLE);
 
    // The three things you need to do to hook up Tim3_ch2
    // PortB5 output. Where the LCD potentiometer is connected.
@@ -1088,13 +1372,14 @@ int main(void) {
     GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
     //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
     USARTSetup();
+    ADCSetup();
 
     copyPatterns();
 
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Heidi  ");
+    writeString((char*)"  I <3 Gretchen  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;
@@ -1108,9 +1393,14 @@ int main(void) {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
     NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn );
 
+    // Enable ADC interrupt
+    //sNVIC_EnableIRQ(ADC1_2_IRQn);
+
     usbReset();
 
-    while(1){};
+    while(1){
+
+    };
     //char* str = malloc( 5 + 1 );
     //writeString(str);
 }
