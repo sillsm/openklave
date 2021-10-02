@@ -761,7 +761,7 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
 
      //*GPIOE_ODR = 0x515b;
      //*GPIOE_ODR = 0x517b;
-     *GPIOE_ODR = 0x1157;
+     *GPIOE_ODR = 0x5157;
      while (wait-- > 0) {
          __asm("nop");
      }
@@ -775,7 +775,7 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    }
    if (whichSweep == 1){
    // Switch and wait 20 clock cycles.
-     *GPIOE_ODR = 0x114b;
+     *GPIOE_ODR = 0x514b;
      while (wait-- > 0) {
          __asm("nop");
      }
@@ -788,7 +788,7 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    }
    if (whichSweep == 2){
    // Switch and wait 20 clock cycles.
-     *GPIOE_ODR = 0x110d;
+     *GPIOE_ODR = 0x510d;
      while (wait-- > 0) {
          __asm("nop");
      }
@@ -801,7 +801,7 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    }
    // Switch and wait 20 clock cycles.
    if (whichSweep == 3){
-     *GPIOE_ODR = 0x111e;
+     *GPIOE_ODR = 0x511e;
      while (wait-- > 0) {
          __asm("nop");
      }
@@ -886,7 +886,7 @@ void usb_ep1(){
     // Careful! The [i]th element is the 1 << ith bit
     for (int i = 0; i < 16; i++){
       pad = i;
-      
+
       uint32_t mask = (1 << i);
       // Turn of turned on notes with no value.
       if ((mask & (KeyboardButtons -> WhichPadsAreOn)) &&
@@ -1309,7 +1309,7 @@ void ADCSetup(){
 
   *GPIOE_CRL = 0x22222222;
   *GPIOE_CRH = 0x22224248;
-  *GPIOE_ODR = 0x113a;
+  *GPIOE_ODR = 0x513a;
 
   // Clear Keyboard state.
   KeyboardButtons -> PadsToModify = 0;
@@ -1320,6 +1320,96 @@ void ADCSetup(){
     clearRam++;
   }
   return;
+}
+
+// SPI2 Setup
+void SPISetup(){
+  // Set Clock CONFIGURATION
+  // We expect this is done in USART Setup already.
+  // Set DMA1 clock.
+  // We expect this is done in USART Setup already.
+  // Configure GPIOE so pad LEDS are on
+  // We expect this is done already.
+  uint32_t * GPIOB_CRL   = (uint32_t *)0x40010c00;
+  uint32_t * GPIOB_CRH   = (uint32_t *)0x40010c04;
+  *GPIOB_CRL = 0x44b84222;
+  *GPIOB_CRH = 0xa8a22444;
+
+  uint32_t * SPI2_CR1   = (uint32_t *)0x40003800;
+  uint32_t * SPI2_X     = (uint32_t *)0x40003804;
+
+  *SPI2_CR1 = 0x0000037c;
+  *SPI2_X   = 0b111;
+}
+
+// FireLEDsFrom fires LED information to SPI from src.
+void FireLEDsFrom(uint32_t src){
+   uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
+   uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
+   uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
+   uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
+
+   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+
+   // DMA off
+   *DMA1_5CCR = 0x3190;
+   // Hook to SPI2 DR
+   *DMA1_5CPAR= 0x4000380c;
+   *DMA1_5CMAR= src;
+   // Transmit 0xa bits to SPI2
+   *DMA1_5CNDT = 0xa;
+   // Fire
+   volatile int wait = 200;
+   while (wait-- > 0) {
+       __asm("nop");
+   }
+   *DMA1_5CCR  = 0x3191;
+   wait = 200;
+   while (wait-- > 0) {
+       __asm("nop");
+   }
+   *GPIOB_ODR = 0x810;
+   wait = 1000;
+   while (wait-- > 0) {
+       __asm("nop");
+   }
+   *GPIOB_ODR = 0x1810;
+   return;
+}
+
+void BrownPadTest(){
+
+    uint32_t * info = (uint32_t *)0x200019d8;
+    info[0] = 0x123123fe;
+    info[1] = 0xeeed3ed3;
+    info[2] = 0xfeffffff;
+
+    info[4] = 0xfffffe;
+    info[5] = 0x3effff;
+    info[6] = 0xfeffffff;
+
+    info[7] = 0xf14f14fe;
+    info[8] = 0x3e41e214;
+    info[9] = 0xfeffffff;
+while(1){
+    FireLEDsFrom(0x200019d8);
+    volatile int wait = 5000;
+    while (wait-- > 0) {
+        __asm("nop");
+    }
+
+    FireLEDsFrom(0x200019d8 + 1);
+    wait = 5000;
+    while (wait-- > 0) {
+        __asm("nop");
+    }
+
+    FireLEDsFrom(0x200019d8 + 2);
+    wait = 5000;
+    while (wait-- > 0) {
+        __asm("nop");
+    }
+  }
 }
 
 // We put this include right before main.
@@ -1349,6 +1439,8 @@ int main(void) {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    // Enable SPI2 for sending colors to top of keyboard.
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
     GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
 
@@ -1371,8 +1463,13 @@ int main(void) {
     //GPIOD -> CRH = 0x422a444b;
     GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
     //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
+    // Set up USART for bottom keybed.
     USARTSetup();
+    // Set up Analog to digital voltage converter to read top of keyboard.
     ADCSetup();
+    // Finally, set up SPI2 to send rgb and on off color signals to pads
+    // and buttons.
+    SPISetup();
 
     copyPatterns();
 
@@ -1397,6 +1494,7 @@ int main(void) {
     //sNVIC_EnableIRQ(ADC1_2_IRQn);
 
     usbReset();
+    BrownPadTest();
 
     while(1){
 

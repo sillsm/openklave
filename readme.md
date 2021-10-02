@@ -968,9 +968,281 @@ commit the data to a light value.
 You can also read color changes from SPI2, but not sure if that's relevant
 for our OS yet.
 
+We start with the working POC in GDB and then explain the discovery process.
 ```
-# Then GPIOB Pulse to send in the clowns
-set{int}0x40010c0c = 0x810
-#pulse
-set{int}0x40010c0c = 0x1810
+define color
+  # SET CLOCKS
+  # RCC_CNFGR
+  set {int} 0x40021004 = 0x11440a
+  # RCC_CR
+  set {int} 0x40021000 = 0x3035583
+
+  # Enable DMA1 Clock
+  # RCC->AHBENR = 1
+  set {int}0x40021014= *0x40021014 | 1
+  # Clock RCC_APB2ENR
+  # Clock RCC_APB2ENR
+  # This includes ADC1 and GPIOE
+  set {int}0x40021018 = 0x427d
+
+  # RCC_APB1ENR
+  set {int}0x4002101c = 0b100000000000000
+
+  # GPIOE_Config_Low"
+  set {int}0x40011800 = 0x22222222
+  # GPIOE_Config_High
+  set {int}0x40011804 = 0x22224248
+
+  # GPIOB_CRL
+  set{int} 0x40010c00 = 0x44b84222
+  # GPIOB_CRH
+  set{int} 0x40010c04 = 0xa8a22444
+
+  # GPIOE_Data_out, this demuxes the ADC1 sampler, takes
+  # a variety of values to fully sample all buttons.
+  set {int}0x4001180c = 0x513a
+
+  # SPI2
+  # SPI2 (CR1)
+  set {int}0x40003800 = 0x0000037c
+  #other
+  set {int}0x40003804 = 7
+  #SSOE, TXDMA, RXDMA
+  set {int}0x40003804 = 0b111
+
+end
 ```
+Shove n bytes from loctation X into SPI2, and bitbang a send pulse
+over GPIOB.
+```
+define TransmitNBytesFromXAndSend
+  # DMA off
+  set{int}0x40020058 = 0x3190
+  # Number of bits to transmit
+  set{int}0x4002005c = $arg0
+  # Source
+  set{int}0x40020064 = $arg1
+  # Turn DMA back on
+  set{int}0x40020058 = 0x3191
+  # Then GPIOB Pulse to send in the clowns
+  set{int}0x40010c0c = 0x810
+  # pulse
+  set{int}0x40010c0c = 0x1810
+end
+```
+
+Look at the 8 banks the default OS seems to be loading pad color from.
+
+```
+display/11xw "1 color scratch", 0x200019d8
+display/11xw "2 color scratch", 0x200019e3
+display/11xw "3 color scratch", 0x200019ee
+display/11xw "4 color scratch", 0x200019f9
+display/11xw "5 color scratch", 0x20001a04
+display/11xw "6 color scratch", 0x20001a0f
+display/11xw "7 color scratch", 0x20001a1a
+display/11xw "8 color scratch", 0x20001a25
+```
+
+To probe pad colors we send a sysex color change request by executing the
+change_pad_colors.py script. We create a breakpoint at a location we believe
+is responsible for sysex processing, and we step through one instruction at
+at time until we determine which strh instruction changed the pad color.
+
+
+It appears these colors are stored here: x/40xw 0x2000357c.
+
+try x/40xc 0x20004b24
+x/100xw 0x20004b00
+
+AND!
+```
+set{int}0x20004b70=0x50505050
+```
+
+We used the method "turn off something and see if it breaks". When SPI2
+is turned off, the pad colors and leds stop changing, but everything else
+seems to work.
+
+set {int} 0x40003800 = 0 is a big hint.
+
+SPI2
+(gdb) x 0x40003800 (CR1)
+0x40003800:	0x0000037c
+
+So Master, Baud rate 111 (/256)
+SPI enabled
+Software slave management, enabled.
+
+(gdb) x 0x40003804
+0x40003804:	0x00000007
+
+= TX buffer and RX buffer both enabled with DMA.
+SSOE, TXDMA, RXDMA
+set {int}0x40003804 = 0b110
+disable RXDMA for SPI2 -- no problem.
+
+set {int}0x40003804 = 0b101
+disable TXDMA for SPI2- no more button LEDs can be controlled
+
+set {int}0x40003804 = 0b111
+you can control buttons again.
+
+WOW. CPAR and CMAR means peripheral and memory, not source destination.
+You can flip so memory writing to peripheral.
+
+(gdb) x 0x40020064
+0x40020064:	0x20001a04
+(gdb) x 0x40020058
+0x40020058:	0x00003193
+(gdb)
+
+Means DMA1_channel 5 is writing to SPI2.
+
+Later
+(gdb) x 0x40020064
+0x40020064:	0x200019d8
+
+Ok putting it together, a stupid interrupt is likely writing something in RAM
+that's getting copied to SPI2 via DMA5_2. This is what is turning button lights
+on and off and (picking) colors for the 16 pads.
+
+"If the channel is configured in noncircular mode, no DMA request is served after the last
+transfer (that is once the number of data items to be transferred has reached zero). In order
+to reload a new number of data items to be transferred into the DMA_CNDTRx register, the
+DMA channel must be disabled."
+
+Buttons
+```
+display/x "DMA1_5CCR", *0x40020058
+display/x "DMA1_CPAR", *0x40020060
+display/x "DMA1_CMAR", *0x40020064
+display/x "DMA1_Count",*0x4002005c
+display/x "SPI2 DR",   *0x4000380c
+display/x "GPIOB_ODR",  *0x40010c0c
+display/x "GPIOB_CRL",  *0x40010c00
+display/x "GPIOB_CRH",  *0x40010c04
+
+```
+
+I then did several rounds of
+
+Incrementing the test RAM address by hand
+TransmitNBitsFromX  and taking notes on the how the different
+value fed to SPI2 seemed to result in different pad
+and button colors and states.
+
+Contrast 0xabdd00ef with 0xabde00ef.
+0xabdd00ef : pad 3 yellow, pad 4 red
+0xabde00ef : pad 3 white, pad4 off
+
+OK. 16 states seem captured by this thing. The MPK249 user manual says
+each pad has 17 colors...
+
+0xFFFFFF00 v
+0x00000000
+
+Shows it takes 3 bytes to store 8 pads worth of data.
+that's 256 * 256 * 256 = 16,777,216 combinations.
+
+17^8 = 6,975,757,441. So we have a serious counting problem in terms of colors.
+
+Now, if instead, the entire second word is used then
+we would have 8 bytes total.
+256^8=1.8446744e+19
+18^16 = 1.2143953e+20
+
+Now,
+2^68 = 2.9514791e+20.
+could work.
+8.5 bytes.
+That leaves 1.5 bytes for all the buttons being on or off.
+you need 24 bits for the 24 buttons.
+3 bytes alone.
+
+Still a math problem and we haven't accounted for it.
+
+Look how the default OS does it. It seems to have some scratch RAM space for
+color information. We figured where it was just watching the DMA memory source
+value for DMA1_5 cycle through a few times.
+
+display/40xw 0x200019d8
+
+or
+
+
+
+// clear ranges of bytes
+set{char[28]}(0x200019e8)=""
+
+red, lightblue, off , dark blue
+dark blue, red, light blue, off
+
+e7
+lightblue, off
+17
+green white
+
+0x2ffffffe
+
+o, o, db, lb
+o, o, o,  o
+it's almost like the evens on first byte are blue, thing
+
+set{int}0x200019d8=0x2ffffffe
+
+0: b, w
+2: b, lb
+4: b, pink
+6: b, b
+8: b, y
+a: b, green
+c: b, r
+e: b, off
+
+Ok so for four pads it seems to have codes in 12 bit copyPatterns
+0x172      172        fe
+pad 5-8    pad 1-4    buttons
+
+And then the next bytes
+
+0xff      172        172
+buttons  pads9-12   pads13-16
+
+Still a puzzle. There should be 17*17*17*17 = 83521 pad combos.
+Instead, it looks like we have 2^12 = 4096 combos only.
+
+Maybe if there were like a 16 bit bitfield somewhere that let you
+selectively tweak the led strenghts to make pink -> hot pink or blue -> light blue.
+
+where is this color data stored on disk? maybe we can poke at it and see where the
+extra color information might be hiding.
+
+Now here's a hint. When we stop at a section that is purple and we stop the chip,
+the pads turn blue pink blue off.
+
+When we stop at all pads orange: off yellow red red.
+
+Wait a minute. Is the reason we can't see complex pad colors when the keyboard stops
+is that it's actively strobing combinations to the pad bank? And the mix colors we see
+are strobed signals paused in the middle. And maybe that's why it looks
+like its buffering eight frames of pad data at any given time.
+
+```
+define Strobe
+  while(true)
+    set{int}0x200019d8=0xed3ed3fe
+    TransmitNBitsFromXAndSend 0xa 0x200019d8
+
+    set{int}0x200019d8=0x123123fe
+    TransmitNBitsFromXAndSend 0xa 0x200019d8
+
+  end
+end
+```
+
+Ok! a bit seizure inducing, but it proves out the concept. If we can strobe
+the
+Color is additive https://www.physicsclassroom.com/Physics-Interactives/Light-and-Color/RGB-Color-Addition/RGB-Color-Addition-Interactive
+There is probably one R one G and one B LED per pad. That's why we found
+2^3 = 8 base states per pad. They're mixed.
