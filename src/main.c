@@ -1355,21 +1355,23 @@ void FireLEDsFrom(uint32_t src){
    *DMA1_5CCR = 0x3190;
    // Hook to SPI2 DR
    *DMA1_5CPAR= 0x4000380c;
+
    *DMA1_5CMAR= src;
+
    // Transmit 0xa bits to SPI2
    *DMA1_5CNDT = 0xa;
    // Fire
-   volatile int wait = 200;
+   volatile int wait = 2000;
    while (wait-- > 0) {
        __asm("nop");
    }
    *DMA1_5CCR  = 0x3191;
-   wait = 200;
+   wait = 2000;
    while (wait-- > 0) {
        __asm("nop");
    }
    *GPIOB_ODR = 0x810;
-   wait = 1000;
+   wait = 2000;
    while (wait-- > 0) {
        __asm("nop");
    }
@@ -1379,33 +1381,35 @@ void FireLEDsFrom(uint32_t src){
 
 void BrownPadTest(){
 
-    uint32_t * info = (uint32_t *)0x200019d8;
+    uint32_t * info = (uint32_t *)0x200019d0;
     info[0] = 0x123123fe;
     info[1] = 0xeeed3ed3;
     info[2] = 0xfeffffff;
 
-    info[4] = 0xfffffe;
-    info[5] = 0x3effff;
-    info[6] = 0xfeffffff;
+    info= (uint32_t *)0x200019e0;
+    info[0] = 0x231123fe;
+    info[1] = 0xeeed3ed3;
+    info[2] = 0xfeffffff;
 
-    info[7] = 0xf14f14fe;
-    info[8] = 0x3e41e214;
-    info[9] = 0xfeffffff;
+    info= (uint32_t *)0x200019f0;
+    info[0] = 0x123231fe;
+    info[1] = 0xeeed3ed3;
+    info[2] = 0xfeffffff;
 while(1){
-    FireLEDsFrom(0x200019d8);
-    volatile int wait = 5000;
+    FireLEDsFrom(0x200019d0);
+    volatile int wait = 1000;
     while (wait-- > 0) {
         __asm("nop");
     }
 
-    FireLEDsFrom(0x200019d8 + 1);
-    wait = 5000;
+    FireLEDsFrom(0x200019e0);
+    wait = 1000;
     while (wait-- > 0) {
         __asm("nop");
     }
 
-    FireLEDsFrom(0x200019d8 + 2);
-    wait = 5000;
+    FireLEDsFrom(0x200019f0);
+    wait = 1000;
     while (wait-- > 0) {
         __asm("nop");
     }
