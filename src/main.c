@@ -110,6 +110,24 @@ void _writeScreen(char*s){
   }
 }*/
 
+struct Event{
+  uint32_t A;
+  uint32_t B;
+  uint32_t C;
+  uint32_t D;
+};
+
+struct EventStack{
+  uint32_t top;
+  uint32_t scratch_1;
+  uint32_t scratch_2;
+  uint32_t scratch_3;
+  Event Buffer[10];
+
+};
+
+volatile EventStack * GlobalEventStack = (EventStack * )0x2000b000;
+
 void clearScreen(){
   bitfield clear      = BITFIELD10(0,0,0,0,0,0,0,0,0,1);
   LCDToWires2(clear);
@@ -148,7 +166,6 @@ int amIInASetAddressTransaction = 0;
 
 // Each bit can be Read, Read/Write, or
 // Toggle (flips value on 1, no change on 0)
-enum BitType{R, RW, T};
 
 struct Register{
   const uint32_t toggleMask;
@@ -815,6 +832,18 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    return;
  }
 //}
+// CheckButtonsPushed checks if any binary buttons have been pushed,
+// and generates event on GlobalEventStack if so.
+void CheckButtonsPushed(){
+
+}
+
+void CollectAllKeyboardSignals(){
+  PadChecker();
+  // Check if any binary buttons have been pushed, and generates
+  // event on GlobalEventStack if so.
+  CheckButtonsPushed();
+}
 
 // Basic notes from keybed to usbmidi.
 void usb_ep1(){
@@ -836,7 +865,7 @@ void usb_ep1(){
   static uint32_t KeyBufferOffset = 0x100;
 
   //Pollpads for an update.
-  PadChecker();
+  CollectAllKeyboardSignals();
 
   // Bail if
   // 1) No new notes have been played since we last checked OR
@@ -1342,8 +1371,47 @@ void SPISetup(){
   *SPI2_X   = 0b111;
 }
 
+// Make sure you
+void grabSPI2Buttons(){
+  uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
+  uint32_t * DMA1_4CPAR   = (uint32_t *)0x4002004c;
+  uint32_t * DMA1_4CMAR   = (uint32_t *)0x40020050;
+  uint32_t * DMA1_4CNDT   = (uint32_t *)0x40020048;
+  uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
+  uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+
+
+
+  *DMA1_4CCR  = 0x1080;
+  *DMA1_4CMAR = 0x20000c00;
+  *DMA1_4CPAR = 0x4000380c;
+  *DMA1_4CNDT = 0x6;
+  // Then turn back on 4 and wait for 5
+
+  *GPIOB_ODR = 0x1010;
+  volatile int wait = 2000;
+  while (wait-- > 0) {
+      __asm("nop");
+  }
+  *GPIOB_ODR = 0x810;
+  wait = 2000;
+  while (wait-- > 0) {
+      __asm("nop");
+  }
+  *GPIOB_ODR = 0x1810;
+  wait = 2000;
+  while (wait-- > 0) {
+      __asm("nop");
+  }
+
+  *DMA1_4CCR  = 0x1081;
+  *DMA1_5CCR = 0x3191;
+  return;
+}
+
 // FireLEDsFrom fires LED information to SPI from src.
 void FireLEDsFrom(uint32_t src){
+
    uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
    uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
    uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
@@ -1355,11 +1423,11 @@ void FireLEDsFrom(uint32_t src){
    *DMA1_5CCR = 0x3190;
    // Hook to SPI2 DR
    *DMA1_5CPAR= 0x4000380c;
-
    *DMA1_5CMAR= src;
-
    // Transmit 0xa bits to SPI2
    *DMA1_5CNDT = 0xa;
+   grabSPI2Buttons();
+   return;
    // Fire
    volatile int wait = 2000;
    while (wait-- > 0) {
@@ -1379,22 +1447,75 @@ void FireLEDsFrom(uint32_t src){
    return;
 }
 
+// Pad color frame stuff.
+
+// Each Frame of colors to send to SPI will take up a word, just to
+// make alignment prettier. Really, only 0xa bytes are sent.
+static uint32_t RED = 0b001;
+static uint32_t B   = 0b100;
+static uint32_t G   = 0b010;
+
+// Actual Frame that will be written to RAM and sent to SPI.
+struct Frame {
+  uint32_t one;
+  uint32_t two;
+  uint32_t three;
+  uint32_t four;
+};
+
+// Configuration data to be converted to a packed 4 word thing.
+struct FrameData {
+  uint32_t Pads[16];
+  // We'll eat the lower three bytes from the word here and pack it
+  // into the frame.
+  uint32_t otherbuttons;
+};
+
+constexpr Frame MakeFrame (FrameData fd){
+  struct Frame f = Frame{};
+  // Start byte packing.
+  f.one =
+  ((~fd.Pads[0])&0b111) << 8  |
+  ((~fd.Pads[1])&0b111) << 11 |
+  ((~fd.Pads[2])&0b111) << 14 |
+  ((~fd.Pads[3])&0b111) << 17 |
+  ((~fd.Pads[4])&0b111) << 20 |
+  ((~fd.Pads[5])&0b111) << 23 |
+  ((~fd.Pads[6])&0b111) << 26 |
+  ((~fd.Pads[7])&0b111) << 29;
+
+  f.two =
+  ((~fd.Pads[8])&0b111) <<  0  |
+  ((~fd.Pads[9])&0b111) <<  3  |
+  ((~fd.Pads[10])&0b111) << 6  |
+  ((~fd.Pads[11])&0b111) << 9  |
+  ((~fd.Pads[12])&0b111) << 12 |
+  ((~fd.Pads[13])&0b111) << 15 |
+  ((~fd.Pads[14])&0b111) << 18 |
+  ((~fd.Pads[15])&0b111) << 21;
+
+  return f;
+}
+
 void BrownPadTest(){
+    FrameData fd = FrameData{{RED,B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
+    struct Frame f = MakeFrame(fd);
+
 
     uint32_t * info = (uint32_t *)0x200019d0;
-    info[0] = 0x123123fe;
-    info[1] = 0xeeed3ed3;
-    info[2] = 0xfeffffff;
+    info[0] = f.one;
+    info[1] = f.two;
+    info[2] = f.three;
 
     info= (uint32_t *)0x200019e0;
-    info[0] = 0x231123fe;
-    info[1] = 0xeeed3ed3;
-    info[2] = 0xfeffffff;
+    info[0] = f.one;
+    info[1] = f.two;
+    info[2] = f.three;
 
     info= (uint32_t *)0x200019f0;
-    info[0] = 0x123231fe;
-    info[1] = 0xeeed3ed3;
-    info[2] = 0xfeffffff;
+    info[0] = f.one;
+    info[1] = f.two;
+    info[2] = f.three;
 while(1){
     FireLEDsFrom(0x200019d0);
     volatile int wait = 1000;
@@ -1498,7 +1619,17 @@ int main(void) {
     //sNVIC_EnableIRQ(ADC1_2_IRQn);
 
     usbReset();
+
+    for (int i = 0; i < 10; i++){
+      GlobalEventStack->Buffer[i].A = 1;
+      GlobalEventStack->Buffer[i].B = 2;
+      GlobalEventStack->Buffer[i].C = 3;
+      GlobalEventStack->Buffer[i].D = 4;
+    }
+
     BrownPadTest();
+
+
 
     while(1){
 
