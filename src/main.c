@@ -1391,8 +1391,6 @@ void grabSPI2Buttons(){
   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
 
 
-   *GPIOB_ODR = 0x1010;
-
   *DMA1_4CCR  = 0x1080;
   *DMA1_4CMAR = 0x20000c00;
   *DMA1_4CPAR = 0x4000380c;
@@ -1416,6 +1414,18 @@ void grabSPI2Buttons(){
 
   *DMA1_4CCR  = 0x1081;
   *DMA1_5CCR =  0x3191;
+
+  wait = 2000;
+  while (wait-- > 0) {
+      __asm("nop");
+  }
+  *GPIOB_ODR = 0x810;
+  wait = 2000;
+  while (wait-- > 0) {
+      __asm("nop");
+  }
+  *GPIOB_ODR = 0x1810;
+
 
   return;
 }
