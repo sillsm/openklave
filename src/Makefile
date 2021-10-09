@@ -24,8 +24,8 @@ ST_FLASH ?= st-flash
 CFLAGS  = -g -O2 -Wall -Wunused --specs=nosys.specs -std=c++17
 #CFLAGS += -T$(STD_PERIPH_LIBS)/Project/STM32F10x_StdPeriph_Template/TrueSTUDIO/STM3210B-EVAL/stm32_flash.ld
 CFLAGS += -T stm32_flash.ld
-CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m4 -mthumb-interwork
-CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
+CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m3 -mthumb-interwork
+CFLAGS += -mfloat-abi=soft -mfpu=fpv4-sp-d16
 CFLAGS += -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER
 CFLAGS += -Wl,--gc-sections
 CFLAGS += -I.

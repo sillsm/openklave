@@ -53,7 +53,8 @@ void LCDToWires2(bitfield b){
   // to the upper register of BSRR.
   uint32_t controlmask = 0b00000000000000000000000000000110;
   //GPIOB->BSRR = controlbits | (~controlbits & controlmask) << 16;
-  GPIOB -> ODR = controlbits;
+  uint32_t readMaskChange = ((GPIOB -> ODR) & 0b1001) | controlbits;
+  GPIOB -> ODR = readMaskChange;
 
   // Port C0-7 does the data stuff.
   uint32_t databits = b.field&0b0011111111;
@@ -1371,6 +1372,15 @@ void SPISetup(){
   *SPI2_X   = 0b111;
 }
 
+void setGPIOB11and12(uint32_t val){
+   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+   uint32_t readMaskChange = *GPIOB_ODR;
+   readMaskChange &=0b11110011111111111;
+   readMaskChange |= val << 11;
+   *GPIOB_ODR = readMaskChange;
+   return;
+}
+
 // Make sure you
 void grabSPI2Buttons(){
   uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
@@ -1381,6 +1391,7 @@ void grabSPI2Buttons(){
   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
 
 
+   *GPIOB_ODR = 0x1010;
 
   *DMA1_4CCR  = 0x1080;
   *DMA1_4CMAR = 0x20000c00;
@@ -1388,24 +1399,24 @@ void grabSPI2Buttons(){
   *DMA1_4CNDT = 0x6;
   // Then turn back on 4 and wait for 5
 
+
+  //setGPIOB11and12(0b01);
   *GPIOB_ODR = 0x1010;
   volatile int wait = 2000;
   while (wait-- > 0) {
       __asm("nop");
   }
-  *GPIOB_ODR = 0x810;
-  wait = 2000;
-  while (wait-- > 0) {
-      __asm("nop");
-  }
   *GPIOB_ODR = 0x1810;
+
+  //setGPIOB11and12(0b11);
   wait = 2000;
   while (wait-- > 0) {
       __asm("nop");
   }
 
   *DMA1_4CCR  = 0x1081;
-  *DMA1_5CCR = 0x3191;
+  *DMA1_5CCR =  0x3191;
+
   return;
 }
 
@@ -1429,6 +1440,7 @@ void FireLEDsFrom(uint32_t src){
    grabSPI2Buttons();
    return;
    // Fire
+   /*
    volatile int wait = 2000;
    while (wait-- > 0) {
        __asm("nop");
@@ -1438,13 +1450,20 @@ void FireLEDsFrom(uint32_t src){
    while (wait-- > 0) {
        __asm("nop");
    }
-   *GPIOB_ODR = 0x810;
+   //=  0b100000010000
+   //*GPIOB_ODR = 0x810;
+   setGPIOB11and12(1);
    wait = 2000;
    while (wait-- > 0) {
        __asm("nop");
    }
-   *GPIOB_ODR = 0x1810;
+   //0x1010
+   //=  b1000000010000
+   //= 0b1100000010000
+    setGPIOB11and12(3);
+   //*GPIOB_ODR = 0x1810;
    return;
+   */
 }
 
 // Pad color frame stuff.
@@ -1619,6 +1638,8 @@ int main(void) {
     //sNVIC_EnableIRQ(ADC1_2_IRQn);
 
     usbReset();
+    // Allow some time for USB to attempt to connect.
+    delay(10);
 
     for (int i = 0; i < 10; i++){
       GlobalEventStack->Buffer[i].A = 1;
