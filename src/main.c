@@ -159,7 +159,7 @@ void GlobalEventStackOverflow(){
 }
 
 // Do we need to replace volatile keyword here
-static EventStack * GlobalEventStack = (EventStack * )0x2000b000;
+ EventStack * GlobalEventStack = (EventStack * )0x2000b000;
 
 constexpr void PushEvent(EventStack * ES, Event e){
   // If trying to push past capacity, panic
@@ -171,9 +171,8 @@ constexpr void PushEvent(EventStack * ES, Event e){
 }
 
 constexpr Event PopEvent(EventStack * ES){
-    if (ES -> top <= 0){
-      ES -> top = -1;
-      return Event{};
+    if (ES -> top < 0){
+      return Event{0,0,0,0};
     }
     // Otherwise
     ES -> top = ES -> top  -1;
@@ -900,7 +899,7 @@ static uint32_t * GlobalButtonRamLocation = (uint32_t *)0x20000c00;
 // and generates event on GlobalEventStack if so.
 void CheckButtonsPushed(){
   // Start with S buttons.
-  uint32_t SButtons = *GlobalButtonRamLocation &0xFF000000;
+  uint32_t SButtons = *(GlobalButtonRamLocation+1) &0xFF;
   // One is button pressed, Zero is button up.
   // SButtons start not pressed.
   static uint32_t SButtonStates[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -958,9 +957,10 @@ void usb_ep1(){
   int noNewKeybedData = ((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff));
   int keybedDataNotReady = ((*KeyOffset % 4) != 0);
   int noUpperKeyboardData = (KeyboardButtons -> PadsToModify == 0) ;//&
+  int noEvents      = IsEventStackEmpty(GlobalEventStack);
   //(KeyboardButtons -> WhichPadsAreOn == 0) ;
 
-  if ((noNewKeybedData & noUpperKeyboardData) | keybedDataNotReady){
+  if ((noNewKeybedData & noUpperKeyboardData & noEvents) | keybedDataNotReady ){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -975,7 +975,7 @@ void usb_ep1(){
   int velocity = 99;
   uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
   //uint32_t noteChannel = 121 | (0b10100011 << 8);// Note aftertouch, Channel 1, M type 0x2, group 0
-  
+
   // Was it from the keybed?
   if (!noNewKeybedData){
     // Keybuffer should try decrementing by one frame until it matches KeyOffset.
@@ -989,7 +989,7 @@ void usb_ep1(){
   }
 
   // Was it a pad or a knob or slider?
-  if (noNewKeybedData && !noUpperKeyboardData){
+  if (noNewKeybedData && !noUpperKeyboardData ){
     velocity = 33;
     int pad = 0;
     // Note on, off, or channel pressure?
@@ -1037,6 +1037,24 @@ void usb_ep1(){
     }
 
     val = 100 +pad;
+  }
+
+  // If you checked everything else, you may check buttonstuff last.
+  if (noNewKeybedData && noUpperKeyboardData && !noEvents){
+    Event e = PopEvent(GlobalEventStack);
+    // Careful! the Event you popped may not have note data then you are
+    // transmitting spurious info.
+    // Really, you should peak up above and see if the event
+    // is consumable by USB, and act like nothing is there if
+    // it is not.
+    if (e.A == 300){
+      val = 40 + e.C;
+      velocity = 88;
+    }
+    if (e.A == 301){
+       val = 40 + e.C;
+       noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
+    }
   }
 
 
@@ -1667,6 +1685,9 @@ int main(void) {
     //GPIOD -> CRH = 0x422a444b;
     GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
     //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
+    // Init GlobalEventStack
+    GlobalEventStack->top=-1;
+    GlobalEventStack->capacity = 10;
     // Set up USART for bottom keybed.
     USARTSetup();
     // Set up Analog to digital voltage converter to read top of keyboard.
@@ -1680,7 +1701,7 @@ int main(void) {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Gretchen  ");
+    writeString((char*)"  I <3 Glretchen  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;
@@ -1699,22 +1720,13 @@ int main(void) {
 
     usbReset();
     // Allow some time for USB to attempt to connect.
-    delay(1000);
-
-    for (int i = 0; i < 10; i++){
-      GlobalEventStack->Buffer[i].A = 1;
-      GlobalEventStack->Buffer[i].B = 2;
-      GlobalEventStack->Buffer[i].C = 3;
-      GlobalEventStack->Buffer[i].D = 4;
-    }
+    delay(50);
 
     BrownPadTest();
-
 
 
     while(1){
 
     };
-    //char* str = malloc( 5 + 1 );
-    //writeString(str);
+
 }
