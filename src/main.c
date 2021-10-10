@@ -24,6 +24,12 @@ void delay(int millis) {
     }
 }
 
+void delayTicks(int ticks) {
+        while (ticks-- > 0) {
+            __asm("nop");
+        }
+}
+
 #define BITFIELD10(x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)\
 ((bitfield){10,0b##x0##x1##x2##x3##x4##x5##x6##x7##x8##x9})
 
@@ -111,6 +117,23 @@ void _writeScreen(char*s){
   }
 }*/
 
+
+// This section defines Event and EventStack.
+// Eventually, all integrated signals should be pushed to
+// a global EventStack.
+//
+// USB consumers pop it, convert it, and transmit.
+//
+// Later, user-defined hook events outside the kernel get a shot
+// to provide kernel a call back that pops and pushes events to EventStack
+// write before USB or others consume it.
+//
+// For example, a call back could inspect events for midi notes, and
+// wait until Middle C is identified. Once identified, Middle C is popped,
+// and G E C events are pushed back on the stack, making an automatic chord.
+// Even later, events should be timestamped so consumers can delay event
+// transmission by a certain amount of ticks.
+//
 struct Event{
   uint32_t A;
   uint32_t B;
@@ -119,15 +142,53 @@ struct Event{
 };
 
 struct EventStack{
-  uint32_t top;
-  uint32_t scratch_1;
+  int32_t top;
+  int32_t capacity;
   uint32_t scratch_2;
   uint32_t scratch_3;
   Event Buffer[10];
 
 };
 
-volatile EventStack * GlobalEventStack = (EventStack * )0x2000b000;
+// Call this if someone tries to allocate past the capacity of the
+// GlobalEventStack
+void GlobalEventStackOverflow(){
+  while (1) {
+      __asm("nop");
+  }
+}
+
+// Do we need to replace volatile keyword here
+static EventStack * GlobalEventStack = (EventStack * )0x2000b000;
+
+constexpr void PushEvent(EventStack * ES, Event e){
+  // If trying to push past capacity, panic
+  if (ES-> top >= (ES-> capacity - 1)){
+    GlobalEventStackOverflow();
+  }
+  ES->top = ES-> top + 1;
+  ES -> Buffer[ES->top] = e;
+}
+
+constexpr Event PopEvent(EventStack * ES){
+    if (ES -> top <= 0){
+      ES -> top = -1;
+      return Event{};
+    }
+    // Otherwise
+    ES -> top = ES -> top  -1;
+    return ES -> Buffer[ES->top+1];
+}
+
+constexpr int IsEventStackEmpty (EventStack *ES){
+  if (ES -> top < 0){return 1;}
+  return 0;
+}
+
+Event PeekTopEvent(EventStack * ES, Event e){
+  return ES -> Buffer[ES -> top];
+}
+
 
 void clearScreen(){
   bitfield clear      = BITFIELD10(0,0,0,0,0,0,0,0,0,1);
@@ -833,9 +894,31 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    return;
  }
 //}
+
+static uint32_t * GlobalButtonRamLocation = (uint32_t *)0x20000c00;
 // CheckButtonsPushed checks if any binary buttons have been pushed,
 // and generates event on GlobalEventStack if so.
 void CheckButtonsPushed(){
+  // Start with S buttons.
+  uint32_t SButtons = *GlobalButtonRamLocation &0xFF000000;
+  // One is button pressed, Zero is button up.
+  // SButtons start not pressed.
+  static uint32_t SButtonStates[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  for (int i = 0; i<8; i++){
+      if (((~SButtons) & (1 << i)) && (SButtonStates[i] == 0)) {
+        // Random button down event
+        SButtonStates[i] = 1;
+        Event e = {300,0,(uint32_t)i,0};
+        PushEvent(GlobalEventStack, e);
+      }
+      if (((SButtons) & (1 << i)) && (SButtonStates[i] == 1)) {
+        // Random button up event
+        SButtonStates[i] = 0;
+        Event e = {301,0,(uint32_t)i,0};
+        PushEvent(GlobalEventStack, e);
+      }
+
+  }
 
 }
 
@@ -892,6 +975,7 @@ void usb_ep1(){
   int velocity = 99;
   uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
   //uint32_t noteChannel = 121 | (0b10100011 << 8);// Note aftertouch, Channel 1, M type 0x2, group 0
+  
   // Was it from the keybed?
   if (!noNewKeybedData){
     // Keybuffer should try decrementing by one frame until it matches KeyOffset.
@@ -1400,32 +1484,19 @@ void grabSPI2Buttons(){
 
   //setGPIOB11and12(0b01);
   *GPIOB_ODR = 0x1010;
-  volatile int wait = 2000;
-  while (wait-- > 0) {
-      __asm("nop");
-  }
+  delayTicks(2000);
   *GPIOB_ODR = 0x1810;
 
   //setGPIOB11and12(0b11);
-  wait = 2000;
-  while (wait-- > 0) {
-      __asm("nop");
-  }
+  delayTicks(2000);
 
   *DMA1_4CCR  = 0x1081;
   *DMA1_5CCR =  0x3191;
 
-  wait = 2000;
-  while (wait-- > 0) {
-      __asm("nop");
-  }
+  delayTicks(2000);
   *GPIOB_ODR = 0x810;
-  wait = 2000;
-  while (wait-- > 0) {
-      __asm("nop");
-  }
+  delayTicks(2000);
   *GPIOB_ODR = 0x1810;
-
 
   return;
 }
@@ -1438,7 +1509,7 @@ void FireLEDsFrom(uint32_t src){
    uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
    uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
 
-   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+   //uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
 
    // DMA off
    *DMA1_5CCR = 0x3190;
@@ -1449,31 +1520,6 @@ void FireLEDsFrom(uint32_t src){
    *DMA1_5CNDT = 0xa;
    grabSPI2Buttons();
    return;
-   // Fire
-   /*
-   volatile int wait = 2000;
-   while (wait-- > 0) {
-       __asm("nop");
-   }
-   *DMA1_5CCR  = 0x3191;
-   wait = 2000;
-   while (wait-- > 0) {
-       __asm("nop");
-   }
-   //=  0b100000010000
-   //*GPIOB_ODR = 0x810;
-   setGPIOB11and12(1);
-   wait = 2000;
-   while (wait-- > 0) {
-       __asm("nop");
-   }
-   //0x1010
-   //=  b1000000010000
-   //= 0b1100000010000
-    setGPIOB11and12(3);
-   //*GPIOB_ODR = 0x1810;
-   return;
-   */
 }
 
 // Pad color frame stuff.
@@ -1527,24 +1573,28 @@ constexpr Frame MakeFrame (FrameData fd){
 }
 
 void BrownPadTest(){
-    FrameData fd = FrameData{{RED,B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
-    struct Frame f = MakeFrame(fd);
+    FrameData fd1 = FrameData{{RED,B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
+    struct Frame f1 = MakeFrame(fd1);
+    FrameData fd2 = FrameData{{B,  B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
+    struct Frame f2 = MakeFrame(fd2);
+    FrameData fd3 = FrameData{{B,  B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
+    struct Frame f3 = MakeFrame(fd3);
 
 
     uint32_t * info = (uint32_t *)0x200019d0;
-    info[0] = f.one;
-    info[1] = f.two;
-    info[2] = f.three;
+    info[0] = f1.one;
+    info[1] = f1.two;
+    info[2] = f1.three;
 
     info= (uint32_t *)0x200019e0;
-    info[0] = f.one;
-    info[1] = f.two;
-    info[2] = f.three;
+    info[0] = f2.one;
+    info[1] = f2.two;
+    info[2] = f2.three;
 
     info= (uint32_t *)0x200019f0;
-    info[0] = f.one;
-    info[1] = f.two;
-    info[2] = f.three;
+    info[0] = f3.one;
+    info[1] = f3.two;
+    info[2] = f3.three;
 while(1){
     FireLEDsFrom(0x200019d0);
     volatile int wait = 1000;
@@ -1649,7 +1699,7 @@ int main(void) {
 
     usbReset();
     // Allow some time for USB to attempt to connect.
-    delay(10);
+    delay(1000);
 
     for (int i = 0; i < 10; i++){
       GlobalEventStack->Buffer[i].A = 1;

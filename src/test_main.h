@@ -124,9 +124,45 @@ void TestPMAIterators(){
 
 }
 
+constexpr EventStack StackMock1(){
+  EventStack es = {-1, 10, 0, 0, {}};
+  Event Event1 =  {44, 55, 66, 77};
+  PushEvent(&es, Event1 );
+  PushEvent(&es, Event1 );
+  return es;
+}
+
+constexpr EventStack StackMock2(int toPush, int toPop){
+  EventStack es = {-1, 10, 0, 0, {}};
+  Event Event1 =  {44, 55, 66, 77};
+  for (int j = 0; j < toPush; j++){
+    PushEvent(&es, Event1);
+  }
+  for (int j = 0; j < toPop; j++){
+    PopEvent(&es);
+  }
+  return es;
+}
+
+void TestEventStack(){
+
+  constexpr EventStack e1 = StackMock1();
+  EXPECT((e1.top==1), e1.top);
+
+  //
+  constexpr EventStack e2 = StackMock2(5,0);
+  EXPECT((e2.top==4), e2.top);
+
+  constexpr EventStack e3 = StackMock2(5,2);
+  EXPECT((e3.top==2), e3.top);
+
+
+}
+
 void Test(){
   TestGetRegisterUpdateValue();
   TestUSBFunctions();
   TestPMACopy();
   TestPMAIterators();
+  TestEventStack();
 }
