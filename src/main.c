@@ -24,8 +24,9 @@ void delay(int millis) {
     }
 }
 
-void delayTicks(int ticks) {
-        while (ticks-- > 0) {
+void delayTicks(uint32_t ticks) {
+        volatile uint32_t x = ticks;
+        while (x-- > 0) {
             __asm("nop");
         }
 }
@@ -1471,73 +1472,8 @@ void SPISetup(){
   uint32_t * SPI2_X     = (uint32_t *)0x40003804;
 
   *SPI2_CR1 = 0x0000037c;
-  *SPI2_X   = 0b111;
-}
-
-void setGPIOB11and12(uint32_t val){
-   uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
-   uint32_t readMaskChange = *GPIOB_ODR;
-   readMaskChange &=0b11110011111111111;
-   readMaskChange |= val << 11;
-   *GPIOB_ODR = readMaskChange;
-   return;
-}
-
-// Make sure you
-void grabSPI2Buttons(){
-  uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
-  uint32_t * DMA1_4CPAR   = (uint32_t *)0x4002004c;
-  uint32_t * DMA1_4CMAR   = (uint32_t *)0x40020050;
-  uint32_t * DMA1_4CNDT   = (uint32_t *)0x40020048;
-  uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
-  uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
-
-
-  *DMA1_4CCR  = 0x1080;
-  *DMA1_4CMAR = 0x20000c00;
-  *DMA1_4CPAR = 0x4000380c;
-  *DMA1_4CNDT = 0x6;
-  // Then turn back on 4 and wait for 5
-
-
-  //setGPIOB11and12(0b01);
-  *GPIOB_ODR = 0x1010;
-  delayTicks(2000);
-  *GPIOB_ODR = 0x1810;
-
-  //setGPIOB11and12(0b11);
-  delayTicks(2000);
-
-  *DMA1_4CCR  = 0x1081;
-  *DMA1_5CCR =  0x3191;
-
-  delayTicks(2000);
-  *GPIOB_ODR = 0x810;
-  delayTicks(2000);
-  *GPIOB_ODR = 0x1810;
-
-  return;
-}
-
-// FireLEDsFrom fires LED information to SPI from src.
-void FireLEDsFrom(uint32_t src){
-
-   uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
-   uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
-   uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
-   uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
-
-   //uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
-
-   // DMA off
-   *DMA1_5CCR = 0x3190;
-   // Hook to SPI2 DR
-   *DMA1_5CPAR= 0x4000380c;
-   *DMA1_5CMAR= src;
-   // Transmit 0xa bits to SPI2
-   *DMA1_5CNDT = 0xa;
-   grabSPI2Buttons();
-   return;
+  //*SPI2_X   = 0b111;
+  *SPI2_X   = 0b1000111;
 }
 
 // Pad color frame stuff.
@@ -1590,7 +1526,7 @@ constexpr Frame MakeFrame (FrameData fd){
   return f;
 }
 
-void BrownPadTest(){
+void SetupPadColorFrames(){
     FrameData fd1 = FrameData{{RED,B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
     struct Frame f1 = MakeFrame(fd1);
     FrameData fd2 = FrameData{{B,  B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
@@ -1613,25 +1549,118 @@ void BrownPadTest(){
     info[0] = f3.one;
     info[1] = f3.two;
     info[2] = f3.three;
-while(1){
-    FireLEDsFrom(0x200019d0);
-    volatile int wait = 1000;
-    while (wait-- > 0) {
-        __asm("nop");
-    }
+}
 
-    FireLEDsFrom(0x200019e0);
-    wait = 1000;
-    while (wait-- > 0) {
-        __asm("nop");
-    }
 
-    FireLEDsFrom(0x200019f0);
-    wait = 1000;
-    while (wait-- > 0) {
-        __asm("nop");
+// We use TIM2 to circulate pad colors.
+// TODO: Make TIM2 a generic "do this later"
+// function which takes a fptr and a ticks variable,
+// counts down the ticks until it hits 0 and then fires
+// fptr.
+void TIM2Setup(){
+  TIM2 -> CR1 = 0x81;
+  TIM2 -> SR  = 0;
+  TIM2 -> PSC = 7200-1; // milisecond because STM32f103 is clocked at 72 MHZ
+  TIM2 -> CCMR1 = 0x00006800;
+  TIM2 -> CCER = 0x10;
+  TIM2 -> ARR  = 5; // every 5 miliseconds
+  TIM2 -> DIER = 1;
+  //TIM3 -> CCR2 = 0x00000155; // This is the contrast value.
+  //TIM3 -> DMAR = 0x00000081;
+
+}
+
+// This handles both pad color animation and
+// fetching button state from SPI2.
+extern "C" void TIM2_IRQHandler(){
+  uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
+  uint32_t * DMA1_4CPAR   = (uint32_t *)0x4002004c;
+  uint32_t * DMA1_4CMAR   = (uint32_t *)0x40020050;
+  uint32_t * DMA1_4CNDT   = (uint32_t *)0x40020048;
+
+  uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
+  uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
+  uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
+  uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
+
+  uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+
+  uint32_t Frame1       = 0x200019d0;
+  uint32_t Frame2       = 0x200019e0;
+  uint32_t Frame3       = 0x200019f0;
+
+  static int i = -1;
+  i++;
+
+  if (i == 0){
+
+// DMA off
+  *DMA1_5CCR = 0x3190;
+// Hook to SPI2 DR
+  *DMA1_5CPAR= 0x4000380c;
+
+// Transmit 0xa bits to SPI2
+  *DMA1_5CNDT = 0xa;
+
+
+  *DMA1_4CCR  = 0x1080;
+  *DMA1_4CMAR = 0x20000c00;
+  *DMA1_4CPAR = 0x4000380c;
+  *DMA1_4CNDT = 0x6;
+// Then turn back on 4 and wait for 5
+    static int j = 0;
+    switch(j) {
+    case 0  :
+       *DMA1_5CMAR = Frame1;
+       break; /* optional */
+    case 1  :
+       *DMA1_5CMAR = Frame2;
+       break;
+    case 2  :
+       *DMA1_5CMAR = Frame3;
+       break;
+    default :
+    j = -1;
     }
+    j++;
+
+
+  //setGPIOB11and12(0b01);
+  *GPIOB_ODR = 0x1010;
+    TIM2 -> SR  = 0;
+    return;
   }
+  if (i == 1){
+  *GPIOB_ODR = 0x1810;
+    TIM2 -> SR  = 0;
+  return;
+  }
+  //setGPIOB11and12(0b11);
+
+  if (i == 2){
+    *DMA1_4CCR  = 0x1081;
+    *DMA1_5CCR =  0x3191;
+      TIM2 -> SR  = 0;
+    return;
+  }
+
+  if (i == 3){
+    *GPIOB_ODR = 0x810;
+      TIM2 -> SR  = 0;
+    return;
+  }
+
+  if (i == 4){
+      *GPIOB_ODR = 0x1810;
+        TIM2 -> SR  = 0;
+      return;
+  }
+  if (i == 5){
+    i = -1;
+      TIM2 -> SR  = 0;
+    return;
+  }
+
 }
 
 // We put this include right before main.
@@ -1701,7 +1730,7 @@ int main(void) {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Glretchen  ");
+    writeString((char*)"  I <3 Gretchen  ");
 
     // Test to see if we should execute test suite.
     uint32_t * testSigil = (uint32_t *) 0x20006000;
@@ -1715,14 +1744,22 @@ int main(void) {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
     NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn );
 
+
     // Enable ADC interrupt
-    //sNVIC_EnableIRQ(ADC1_2_IRQn);
+
 
     usbReset();
     // Allow some time for USB to attempt to connect.
-    delay(50);
+    //delay(50);
 
-    BrownPadTest();
+     // Init SPI2
+    // Kick off SPI2 first time.
+  	//DMA1_Channel5_IRQHandler();
+    //NVIC_EnableIRQ(	DMA1_Channel5_IRQn);
+    SetupPadColorFrames();
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    TIM2Setup();
+    NVIC_EnableIRQ(TIM2_IRQn );
 
 
     while(1){
