@@ -3,6 +3,7 @@ STD_PERIPH_LIBS ?= ./STM32F10x_StdPeriph_Lib_V3.5.0/
 
 # list of source files
 SOURCES  = main.c
+SOURCES += kernel.c
 SOURCES += system_stm32f10x.c
 SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_rcc.c
 SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/misc.c
