@@ -776,20 +776,47 @@ typedef struct buttons{
 // This very dangerous function manipulates the global
 // KeyboardButtons pointer object.
 //
+// TODO: figures out how to generate gloabl events write here.
+// Further, if its an event generator, we should consider
+// getting rid of the globals and just make this a closure.
 void CompareAndSetPad(int Pad, uint16_t valToCompare){
   // First, we shift the Pad's current value 16 bits to the left.
   uint32_t lastMeasuredValue= (KeyboardButtons->Pads[Pad])&0xFFFF;
   KeyboardButtons->Pads[Pad] = (lastMeasuredValue<<16) | valToCompare;
   // compute their difference and set a modification bit if the difference
   // is too big. We use XOR as a proxy for Abs(a-b)
+
+  int modify = 0;
   if ((lastMeasuredValue ^ valToCompare) > 2){
-    KeyboardButtons -> PadsToModify |= (1<<Pad);
+    modify = 1;
+    //KeyboardButtons -> PadsToModify |= (1<<Pad);
+  }
+  static int IsThisPadOn[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  // No matter what, note off at 0
+  if ((valToCompare == 0) && IsThisPadOn[Pad] ){
+    IsThisPadOn[Pad]= 0;
+    Event e = {901,0,60+(uint32_t)Pad,0};
+    PushEvent(GlobalEventStack, e);
+    return;
   }
 
-  // If a pad is on but it's at 0, flag to turn it off.
-  if ((KeyboardButtons->WhichPadsAreOn & (1 << Pad)) && (valToCompare == 0)){
-    KeyboardButtons -> PadsToModify |= (1<<Pad);
+  if (modify && !IsThisPadOn[Pad]){
+    // If the Pad isn't ON, generate a PADON event.
+    Event e = {900,97,60+(uint32_t)Pad,0};
+    PushEvent(GlobalEventStack, e);
+    IsThisPadOn[Pad] = 1;
+    return;
   }
+  if (modify && IsThisPadOn[Pad]){
+    // Pad is already ON, and not 0.
+    // So we want aftertouch pressure event.
+    uint32_t velocity = (((KeyboardButtons-> Pads[Pad]) & 0x0FF0)>>4 ) + 3;
+    Event e = {905,velocity,60+(uint32_t)Pad,0};
+    PushEvent(GlobalEventStack, e);
+
+    return;
+  }
+
   return;
 }
 
@@ -956,7 +983,8 @@ void CheckKeyBed(){
 }
 
 void CollectAllKeyboardSignals(){
-
+  // Check pad states and generate events,
+  // including polyphonic pressure.
   PadChecker();
   // Check if any binary buttons have been pushed, and generates
   // event on GlobalEventStack if so.
@@ -974,15 +1002,11 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
 
-
   // TODO: Period collecting of all keyboard signals needs to be
   // refactored to a timer interrut.
   CollectAllKeyboardSignals();
 
-  int noUpperKeyboardData = (KeyboardButtons -> PadsToModify == 0) ;//&
-  int noEvents      = IsEventStackEmpty(GlobalEventStack);
-
-  if ((noUpperKeyboardData & noEvents)  ){
+  if (IsEventStackEmpty(GlobalEventStack)){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -998,59 +1022,7 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
   uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
   //uint32_t noteChannel = 121 | (0b10100011 << 8);// Note aftertouch, Channel 1, M type 0x2, group 0
 
-  // Was it a pad or a knob or slider?
-  if (!noUpperKeyboardData ){
-    velocity = 33;
-    int pad = 0;
-    // Note on, off, or channel pressure?
-    // If we see we need to modify a 0 val, turn pad off.
-    // If we're modifying something for the first time, on, and set on.
-    // Otherwise, if on is set and we see a val, channel pressure.
 
-    // Careful! The [i]th element is the 1 << ith bit
-    for (int i = 0; i < 16; i++){
-      pad = i;
-
-      uint32_t mask = (1 << i);
-      // Turn of turned on notes with no value.
-      if ((mask & (KeyboardButtons -> WhichPadsAreOn)) &&
-      (((KeyboardButtons-> Pads[i])&0xFFF) == 0)){
-        // Pad says to Modify it but it has no val.
-        velocity = 3;
-        noteChannel = 121 | (0b10000001 << 8); // note off channel two.
-        KeyboardButtons -> WhichPadsAreOn = (~mask)&(KeyboardButtons -> WhichPadsAreOn);
-        KeyboardButtons -> PadsToModify &= ~mask;
-        break;
-      }
-
-      // You didn't shut it off.
-
-      if (mask & (KeyboardButtons -> PadsToModify)){
-        // Turn off modify bit.
-        KeyboardButtons -> PadsToModify = (~mask)&(KeyboardButtons -> PadsToModify);
-
-
-        velocity = 2;
-        // If pad not on, set and emit
-        if (!(mask & KeyboardButtons -> WhichPadsAreOn)) {
-          // the pad is currently off
-          velocity = 4;
-          noteChannel = 121 | (0b10010001 << 8); // note on.
-          KeyboardButtons -> WhichPadsAreOn |= mask;
-          break;
-        }
-        // polyphonic pressure
-        noteChannel = 121 | (0b10100001 << 8); // note on channel pressure.
-        velocity = (((KeyboardButtons-> Pads[i]) & 0x0FF0)>>4 ) + 3;
-        break;
-      }
-    }
-
-    val = 100 +pad;
-  }
-
-  // If you checked everything else, you may check buttonstuff last.
-  if (noUpperKeyboardData && !noEvents){
     Event e = PopEvent(GlobalEventStack);
     // Careful! the Event you popped may not have note data then you are
     // transmitting spurious info.
@@ -1079,10 +1051,27 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       velocity = e.B;
       val = e.C;
       noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
-
     }
 
-  }
+    // Pad On
+    if ((e.A)== 900){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (144 << 8); // Note on.
+    }
+    // Pad Off
+    if ((e.A)== 901){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
+    }
+    // Pad Polyphonic pressure.
+    if ((e.A)== 905){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (0b10100001 << 8); // note on channel pressure.
+    }
+
 
   // 144 120 100
   // FE is up
@@ -1723,7 +1712,7 @@ int main(void) {
     //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
     // Init GlobalEventStack
     GlobalEventStack->top=-1;
-    GlobalEventStack->capacity = 10;
+    GlobalEventStack->capacity = 100;
     // Set up USART for bottom keybed.
     USARTSetup();
     // Set up Analog to digital voltage converter to read top of keyboard.
