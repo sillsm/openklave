@@ -1039,7 +1039,7 @@ void usb_ep1(){
         }
         // polyphonic pressure
         noteChannel = 121 | (0b10100001 << 8); // note on channel pressure.
-        velocity = ((KeyboardButtons-> Pads[i]) & 0xFFF)/2;
+        velocity = (((KeyboardButtons-> Pads[i]) & 0x0FF0)>>4 ) + 3;
         break;
       }
     }
