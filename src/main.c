@@ -737,25 +737,6 @@ void writeNumberToScreen(uint32_t u){
 
 }
 
-unsigned int decodeMPK249NoteValue(uint32_t u){
-  // magic number map. The reported value of the note
-  // from the keybed
-  // is remapped to the midi value around middle c. 0
-  // is the failure mode.
-  unsigned int map[] = {0, 0, 0, 0, 0, 0, 0, 0, 56, 57, 58, 59, 60,      //  0   - C
-               61, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0,           //  D   - 0x18
-                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 36,          // 0x19 - 0x24
-                37,  38, 39, 64, 65, 66, 67, 68, 69, 70, 71, 0, // 0x25 - 0x30
-                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0,           // 0x31 - 0x3C
-                0,  0, 0, 40, 41, 42, 43, 44, 45, 46,  47, 72,  // 0x3D - 0x48
-                73, 74, 75, 76, 77, 78, 79, 0, 0, 0,  0, 0,     // 0x49 - 0x54
-                0, 0,  0  , 0, 0, 0, 0, 0, 0, 0,  0, 48,        // 0x54 - 0x60
-                49, 50,51 , 52, 53, 54, 55, 78, 79, 80, 81, 82,// 0x61 - 0x6C
-              };
-  unsigned int re = map[(u&0x0000FF00)>>8];
-  return re;
-}
-
 // Struct that holds values for upper part of keyboard
 typedef struct buttons{
     uint32_t Pads[16];
@@ -927,6 +908,52 @@ void CheckButtonsPushed(){
   }
 
 }
+unsigned int decodeMPK249NoteValue(uint32_t u){
+  // magic number map. The reported value of the note
+  // from the keybed
+  // is remapped to the midi value around middle c. 0
+  // is the failure mode.
+  unsigned int map[] = {0, 0, 0, 0, 0, 0, 0, 0, 56, 57, 58, 59, 60,      //  0   - C
+               61, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0,           //  D   - 0x18
+                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 36,          // 0x19 - 0x24
+                37,  38, 39, 64, 65, 66, 67, 68, 69, 70, 71, 0, // 0x25 - 0x30
+                0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0,           // 0x31 - 0x3C
+                0,  0, 0, 40, 41, 42, 43, 44, 45, 46,  47, 72,  // 0x3D - 0x48
+                73, 74, 75, 76, 77, 78, 79, 0, 0, 0,  0, 0,     // 0x49 - 0x54
+                0, 0,  0  , 0, 0, 0, 0, 0, 0, 0,  0, 48,        // 0x54 - 0x60
+                49, 50,51 , 52, 53, 54, 55, 78, 79, 80, 81, 82,// 0x61 - 0x6C
+              };
+  unsigned int re = map[(u&0x0000FF00)>>8];
+  return re;
+}
+
+void CheckKeyBed(){
+  uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
+  // KeyOffset is actually DMA circular buffer offset.
+  uint32_t * KeyOffset        = (uint32_t *)0x40020034;
+  static uint32_t KeyBufferOffset = 0x100;
+
+  int noNewKeybedData = ((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff));
+  int keybedDataNotReady = ((*KeyOffset % 4) != 0);
+
+  if (noNewKeybedData | keybedDataNotReady){return;}
+  // otherwise, we try to find at least one keyboard event and add to
+  // the gloval event stack.
+
+  KeyBufferOffset= (KeyBufferOffset - 4) % 0x100;
+  uint32_t event = *(BaseKeybedEvents + (0x100 - KeyBufferOffset - 4)/4);
+  uint32_t val = (decodeMPK249NoteValue(event));
+
+  uint32_t velocity = 100;
+
+  Event e = {0xFF,100,val,0};
+
+  if ((event & 0x000000FF) == 0xFE){
+    e = {0xFE,0,val,0};
+  }
+  PushEvent(GlobalEventStack, e);
+
+}
 
 void CollectAllKeyboardSignals(){
 
@@ -934,10 +961,12 @@ void CollectAllKeyboardSignals(){
   // Check if any binary buttons have been pushed, and generates
   // event on GlobalEventStack if so.
   CheckButtonsPushed();
+  // Check KeyBed to see if there are any events to register
+  CheckKeyBed();
 }
 
 // Basic notes from keybed to usbmidi.
-void usb_ep1(){
+void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
   // This is helpful in understanding MIDI 1.0 UMP
   // https://imitone.com/midi2/
   // clear interrupts
@@ -962,13 +991,13 @@ void usb_ep1(){
   // 1) No new notes have been played since we last checked OR
   // 2) DMA is in the middle of note transmission so we're getting a non multiple
   // of 4 byte count.
-  int noNewKeybedData = ((*KeyOffset & 0xff) == (KeyBufferOffset & 0xff));
-  int keybedDataNotReady = ((*KeyOffset % 4) != 0);
+
+
   int noUpperKeyboardData = (KeyboardButtons -> PadsToModify == 0) ;//&
   int noEvents      = IsEventStackEmpty(GlobalEventStack);
   //(KeyboardButtons -> WhichPadsAreOn == 0) ;
 
-  if ((noNewKeybedData & noUpperKeyboardData & noEvents) | keybedDataNotReady ){
+  if ((noUpperKeyboardData & noEvents)  ){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     btable * b = (btable *) 0x40006010;
     b->count_tx= 0; // Transmit nothing.
@@ -984,20 +1013,8 @@ void usb_ep1(){
   uint32_t noteChannel = 121 | (144 << 8);// Note on, Channel 1, M type 0x2, group 0
   //uint32_t noteChannel = 121 | (0b10100011 << 8);// Note aftertouch, Channel 1, M type 0x2, group 0
 
-  // Was it from the keybed?
-  if (!noNewKeybedData){
-    // Keybuffer should try decrementing by one frame until it matches KeyOffset.
-    KeyBufferOffset= (KeyBufferOffset - 4) % 0x100;
-    event = *(BaseKeybedEvents + (0x100 - KeyBufferOffset - 4)/4);
-    val = (decodeMPK249NoteValue(event));
-    // If it's a key release event
-    if ((event & 0x000000FF) == 0xFE){
-      noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
-    }
-  }
-
   // Was it a pad or a knob or slider?
-  if (noNewKeybedData && !noUpperKeyboardData ){
+  if (!noUpperKeyboardData ){
     velocity = 33;
     int pad = 0;
     // Note on, off, or channel pressure?
@@ -1048,21 +1065,38 @@ void usb_ep1(){
   }
 
   // If you checked everything else, you may check buttonstuff last.
-  if (noNewKeybedData && noUpperKeyboardData && !noEvents){
+  if (noUpperKeyboardData && !noEvents){
     Event e = PopEvent(GlobalEventStack);
     // Careful! the Event you popped may not have note data then you are
     // transmitting spurious info.
     // Really, you should peak up above and see if the event
     // is consumable by USB, and act like nothing is there if
     // it is not.
+
+    // button down
     if (e.A == 300){
       val = 40 + e.C;
       velocity = 88;
     }
+    // button up
     if (e.A == 301){
        val = 40 + e.C;
        noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
     }
+    // keybed key down
+    if ((e.A)== 0xFF){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (144 << 8); // Note on.
+    }
+    // keybed key up
+    if ((e.A)== 0xFE){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
+
+    }
+
   }
 
 
@@ -1116,7 +1150,7 @@ void usb(){
   // Most of this is for enumeration on Endpoint 0. If we have other requests,
   // forward them along.
   if ((USB->ISTR &0b1111) == 1 ){
-    usb_ep1();
+    ConsumeNoteEventStackAndTransmitNotesOverUSB();
     //uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
     //USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
     //SetRegister(USB_EP1R, setEndpointState(state));
