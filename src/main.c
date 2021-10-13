@@ -974,28 +974,13 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
   uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
   USBEndpointState state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
 
-  static int count = 0;
-  // This algorithm is wrong and needs a write up.
-  // Max(TODO) 1. Make sure if you're about to go over you account for it
-  // 2. catch up on missed notes and transmit them.
 
-  uint32_t * BaseKeybedEvents = (uint32_t *)0x20001a86;
-  // KeyOffset is actually DMA circular buffer offset.
-  uint32_t * KeyOffset        = (uint32_t *)0x40020034;
-  static uint32_t KeyBufferOffset = 0x100;
-
-  //Pollpads for an update.
+  // TODO: Period collecting of all keyboard signals needs to be
+  // refactored to a timer interrut.
   CollectAllKeyboardSignals();
-
-  // Bail if
-  // 1) No new notes have been played since we last checked OR
-  // 2) DMA is in the middle of note transmission so we're getting a non multiple
-  // of 4 byte count.
-
 
   int noUpperKeyboardData = (KeyboardButtons -> PadsToModify == 0) ;//&
   int noEvents      = IsEventStackEmpty(GlobalEventStack);
-  //(KeyboardButtons -> WhichPadsAreOn == 0) ;
 
   if ((noUpperKeyboardData & noEvents)  ){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
@@ -1099,37 +1084,18 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
 
   }
 
-
-  int debug = 0;
-  static uint32_t * DEBUG  = (uint32_t *)0x20005000;
-  if (debug){
-    *DEBUG = count;
-    DEBUG++;
-    *DEBUG =event;
-    DEBUG++;
-    *DEBUG = *KeyOffset;
-    DEBUG++;
-    *DEBUG = KeyBufferOffset;
-    DEBUG++;
-    count++;
-  }
-  // UMP
-
   // 144 120 100
   // FE is up
   uint32_t * PMAWrite = (uint32_t *)0x40006060;
-
   *PMAWrite= noteChannel;
   PMAWrite++;
-
-
   *PMAWrite =  val | velocity << 8 ; // Note val, velocity
 
   btable * b = (btable *) 0x40006010;
   b->count_tx= 4;
+  // Clear interrupts.
   USB->ISTR = 0;
   SetRegister(USB_EP1R, setEndpointState(state));
-  // Clear interrupts.
   return;
 }
 
