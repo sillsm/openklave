@@ -822,7 +822,6 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
      *DEBUG = 11;
      DEBUG++;
    }
-   static int whichSweep = 0;
    // reset which buttons need modification
    //KeyboardButtons -> PadsToModify = 0;
    uint16_t * ADCBase = (uint16_t *) 0x20002c96;
@@ -833,66 +832,73 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
    uint16_t * padd = ADCBase + 3;
    // we sample voltages via ADC.
    // we demux by selecting other ODR values.
-   uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
+   volatile uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
 
-   volatile int wait = 2000;
-   if (whichSweep == 0){
+   static uint32_t wait = 0;
+   wait++;
+   if (wait == 9){wait=0; return;}
 
-     //*GPIOE_ODR = 0x515b;
-     //*GPIOE_ODR = 0x517b;
-     *GPIOE_ODR = 0x5157;
-     while (wait-- > 0) {
-         __asm("nop");
-     }
-     //if (*pada
+   if (wait == 1){
+   *GPIOE_ODR = 0x5157;
+ }
+
+   if (wait == 2){
+
      CompareAndSetPad(12, *pada);
      CompareAndSetPad(13, *padb);
      CompareAndSetPad(14, *padc);
      CompareAndSetPad(15, *padd);
-     whichSweep++;
      return;
    }
-   if (whichSweep == 1){
+
+   if (wait==3){
    // Switch and wait 20 clock cycles.
      *GPIOE_ODR = 0x514b;
-     while (wait-- > 0) {
-         __asm("nop");
-     }
-     CompareAndSetPad(8, *pada);
-     CompareAndSetPad(9, *padb);
-     CompareAndSetPad(10, *padc);
-     CompareAndSetPad(11, *padd);
-     whichSweep++;
      return;
    }
-   if (whichSweep == 2){
+
+   if (wait==4){
+
+    CompareAndSetPad(8, *pada);
+    CompareAndSetPad(9, *padb);
+    CompareAndSetPad(10, *padc);
+    CompareAndSetPad(11, *padd);
+    return;
+   }
+
+   if (wait==5){
    // Switch and wait 20 clock cycles.
      *GPIOE_ODR = 0x510d;
-     while (wait-- > 0) {
-         __asm("nop");
-     }
+     return;
+   }
+
+   if (wait == 6){
+   // Switch and wait 20 clock cycles.
+
      CompareAndSetPad(4, *pada);
      CompareAndSetPad(5, *padb);
      CompareAndSetPad(6, *padc);
      CompareAndSetPad(7, *padd);
-     whichSweep++;
      return;
    }
+
+   if (wait==7){
    // Switch and wait 20 clock cycles.
-   if (whichSweep == 3){
      *GPIOE_ODR = 0x511e;
-     while (wait-- > 0) {
-         __asm("nop");
-     }
+     return;
+   }
+
+   // Switch and wait 20 clock cycles.
+   if (wait==8){
+
      CompareAndSetPad(0, *pada);
      CompareAndSetPad(1, *padb);
      CompareAndSetPad(2, *padc);
      CompareAndSetPad(3, *padd);
-     whichSweep = 0;
      return;
-   }
-   return;
  }
+  return;
+}
 //}
 
 static uint32_t * GlobalButtonRamLocation = (uint32_t *)0x20000c00;
@@ -923,6 +929,7 @@ void CheckButtonsPushed(){
 }
 
 void CollectAllKeyboardSignals(){
+
   PadChecker();
   // Check if any binary buttons have been pushed, and generates
   // event on GlobalEventStack if so.
