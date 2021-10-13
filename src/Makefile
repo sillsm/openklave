@@ -2,14 +2,17 @@
 STD_PERIPH_LIBS ?= ./STM32F10x_StdPeriph_Lib_V3.5.0/
 
 # list of source files
-SOURCES  = main.c
-SOURCES += kernel.c
+
+SOURCES  = kernel.c
 SOURCES += system_stm32f10x.c
 SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_rcc.c
 SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/misc.c
 SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_gpio.c
 
 SOURCES += mpk249start.s
+
+TESTBIN= test_kernel.c
+MAINBIN= main.c
 
 # name for output binary files
 PROJECT ?= led
@@ -34,17 +37,22 @@ CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/
 CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/CoreSupport
 CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/inc
 
-OBJS = $(SOURCES:.c=.o)
+#OBJS = $(SOURCES:.c=.o)
 
-all: $(PROJECT).elf MakeAkaiSysex
+all: $(PROJECT).elf MakeAkaiSysex test.elf
 
 # compile
-$(PROJECT).elf: $(SOURCES)
+$(PROJECT).elf: $(SOURCES) $(MAINBIN)
 	$(CC) $(CFLAGS) $^ -o $@
 	$(OBJCOPY) -v -O ihex $(PROJECT).elf $(PROJECT).hex
 	$(OBJCOPY) -O binary $(PROJECT).elf $(PROJECT).bin
 	$(OBJCOPY) --input-target=binary --output-target=ihex $(PROJECT).bin try.hex
 	$(OBJCOPY) --only-keep-debug $(PROJECT).elf main.debug
+
+test.elf: $(TESTBIN)
+	$(CC) -w -c $(CFLAGS) $^ -o $@
+	@$(OBJCOPY) -v -O ihex test.elf test.hex
+
 
 .PHONY: MakeAkaiSysex
 MakeAkaiSysex:

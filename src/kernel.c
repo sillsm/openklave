@@ -1,3 +1,6 @@
+#ifndef __KERNEL_C
+#define __KERNEL_C
+
 #include "misc.h"
 #include "kernel.h"
 #include <stdint.h>
@@ -1659,11 +1662,6 @@ extern "C" void TIM2_IRQHandler(){
 
 }
 
-// We put this include right before main.
-// So test code can reference the above declared code.
-#include "test_main.h"
-//
-
 int start() {
     // Push it forward
     NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x6000);
@@ -1728,13 +1726,6 @@ int start() {
     contrast();
     writeString((char*)"  I <3 Fetchen  ");
 
-    // Test to see if we should execute test suite.
-    uint32_t * testSigil = (uint32_t *) 0x20006000;
-    if (*testSigil == 0xFeedBeef){
-      Test();
-      return 1;
-    }
-
     // usb init
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
@@ -1763,3 +1754,5 @@ int start() {
     };
 
 }
+
+#endif
