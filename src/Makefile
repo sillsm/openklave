@@ -1,16 +1,17 @@
 # path to STM32F103 standard peripheral library
 STD_PERIPH_LIBS ?= ./STM32F10x_StdPeriph_Lib_V3.5.0/
 THIRD_PARTY ?= ./third_party/
+CONFIG ?= ./config/
 
 # list of source files
 
 SOURCES  = kernel.c
-SOURCES += system_stm32f10x.c
+SOURCES += $(CONFIG)/system_stm32f10x.c
 SOURCES += $(THIRD_PARTY)/stm32f10x_rcc.c
 SOURCES += $(THIRD_PARTY)/misc.c
 SOURCES += $(THIRD_PARTY)/stm32f10x_gpio.c
 
-SOURCES += mpk249start.s
+SOURCES += $(CONFIG)/mpk249start.s
 
 TESTBIN= test_kernel.c
 MAINBIN= main.c

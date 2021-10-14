@@ -1724,7 +1724,7 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Gretchen  ");
+    writeString((char*)"  I <3 French  ");
 
     // usb init
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
