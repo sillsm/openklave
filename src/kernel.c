@@ -1666,7 +1666,6 @@ int start() {
     // Push it forward
     NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x6000);
 
-    GPIO_InitTypeDef GPIO_InitStructure;
 
     //NVIC structure to set up NVIC controller
     //NVIC_InitTypeDef NVIC_InitStructure;
@@ -1688,14 +1687,6 @@ int start() {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
     GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;    // output push-pull mode
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;   // highest speed
-    GPIO_Init(GPIOE, &GPIO_InitStructure) ;             // initialize PORT
-
-    //Turn on LCD backlight
-    GPIO_SetBits(GPIOE, 0x1000);
 
     // Turn on USART3 for keybed signals routing.
     //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);//?
