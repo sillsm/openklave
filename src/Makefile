@@ -7,7 +7,6 @@ CONFIG ?= ./config/
 
 SOURCES  = kernel.c
 SOURCES += $(CONFIG)/system_stm32f10x.c
-#SOURCES += $(THIRD_PARTY)/stm32f10x_rcc.c
 SOURCES += $(THIRD_PARTY)/misc.c
 
 SOURCES += $(CONFIG)/mpk249start.s
