@@ -1,13 +1,14 @@
 # path to STM32F103 standard peripheral library
 STD_PERIPH_LIBS ?= ./STM32F10x_StdPeriph_Lib_V3.5.0/
+THIRD_PARTY ?= ./third_party/
 
 # list of source files
 
 SOURCES  = kernel.c
 SOURCES += system_stm32f10x.c
-SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_rcc.c
-SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/misc.c
-SOURCES += $(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/src/stm32f10x_gpio.c
+SOURCES += $(THIRD_PARTY)/stm32f10x_rcc.c
+SOURCES += $(THIRD_PARTY)/misc.c
+SOURCES += $(THIRD_PARTY)/stm32f10x_gpio.c
 
 SOURCES += mpk249start.s
 
@@ -33,9 +34,10 @@ CFLAGS += -mfloat-abi=soft -mfpu=fpv4-sp-d16
 CFLAGS += -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER
 CFLAGS += -Wl,--gc-sections
 CFLAGS += -I.
-CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/
-CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/CoreSupport
-CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/inc
+CFLAGS += -I$(THIRD_PARTY)/
+#CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/
+#CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/CMSIS/CM3/CoreSupport
+#CFLAGS += -I$(STD_PERIPH_LIBS)/Libraries/STM32F10x_StdPeriph_Driver/inc
 
 #OBJS = $(SOURCES:.c=.o)
 
