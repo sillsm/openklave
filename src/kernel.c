@@ -1662,6 +1662,14 @@ extern "C" void TIM2_IRQHandler(){
 
 }
 
+enum AFIOOptions{AFIO_PartialRemap_TIM3 = 0b100000000000, AFIO_Remap_TIM4=0b1000000000000,
+AFIO_FullRemap_USART3 = 0b110000 };
+
+void EnableAFIO(AFIOOptions o){
+  uint32_t * AFIO_MAPR = (uint32_t *)0x40010004;
+  *AFIO_MAPR |= o;
+}
+
 int start() {
     // Push it forward
     NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x6000);
@@ -1685,8 +1693,10 @@ int start() {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     // Enable SPI2 for sending colors to top of keyboard.
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
-    GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
-    GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
+    //GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
+    EnableAFIO(AFIO_PartialRemap_TIM3);
+    //GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
+    EnableAFIO(AFIO_Remap_TIM4);
 
     // Turn on USART3 for keybed signals routing.
     //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);//?
@@ -1697,7 +1707,8 @@ int start() {
 
     GPIOB -> CRH = 0xa8a22444;
     //GPIOD -> CRH = 0x422a444b;
-    GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
+    //GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
+    EnableAFIO(AFIO_FullRemap_USART3);
     //GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
     // Init GlobalEventStack
     GlobalEventStack->top=-1;
@@ -1715,7 +1726,7 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 French  ");
+    writeString((char*)"  I <3 Gretchen  ");
 
     // usb init
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
