@@ -163,7 +163,7 @@ void GlobalEventStackOverflow(){
 }
 
 // Do we need to replace volatile keyword here
- EventStack * GlobalEventStack = (EventStack * )0x2000b000;
+EventStack * GlobalEventStack = (EventStack * )0x2000b000;
 
 constexpr void PushEvent(EventStack * ES, Event e){
   // If trying to push past capacity, panic
@@ -694,7 +694,7 @@ void usbReset(void){
     // Reset interrupts.
     USB->ISTR = 0;
     // Restore first part of PMA
-    btable * b = (btable *) 0x40006000;
+    volatile btable * b = (btable *) 0x40006000;
     b->add_tx = 0x00000028;
     b->count_tx= 0;
     b->add_rx = 0x20;
@@ -1122,7 +1122,9 @@ void usb(){
     return;
   }
   // Joking around with ISTR handlers.
-  uint32_t * val = (uint32_t *)0x40006040;
+  volatile uint32_t * val = (uint32_t *)0x40006040;
+
+  // THIS NEEDS TO BE VOLATILE
   uint32_t * USB_EP0R = (uint32_t *)0x40005c00;
   //uint32_t * USB_EP1R = (uint32_t *)0x40005c04;
 
@@ -1232,8 +1234,8 @@ void usb(){
       // Is it a SETUP token? Then get ready for an IN.
 
 
-      uint32_t * PMAWrite = (uint32_t *)0x40006050;
-      btable * b = (btable *) 0x40006000;
+      volatile uint32_t * PMAWrite = (uint32_t *)0x40006050;
+      volatile btable * b = (btable *) 0x40006000;
       //b->count_tx= 0x2;?
       b->count_tx= 8;
       // b-> count_tx defaults to 8 bytes.
@@ -1307,7 +1309,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 
   //}
   int debug = 0;
-  uint32_t * val = (uint32_t *)0x40006040;
+  volatile uint32_t * val = (uint32_t *)0x40006040;
   // This logs all the values every time the
   // interrupt was called, starting with
   // initial value 0xdeadbeef at
@@ -1335,11 +1337,11 @@ void USB_LP_CAN1_RX0_IRQHandler(void){
 void USARTSetup(){
 
   // Set up TIM4
-  uint32_t * TIM4_CR1 = (uint32_t *) 0x40000800;
-  uint32_t * TIM4_SR  = (uint32_t *) 0x40000810;
-  uint32_t * TIM4_CCMR_IN1 = (uint32_t *)0x40000818;
-  uint32_t * TIM4_CCER    = (uint32_t *)0x40000820;
-  uint32_t * TIM4_ARR = (uint32_t *)0x4000042c;
+  volatile uint32_t * TIM4_CR1 = (uint32_t *) 0x40000800;
+  volatile uint32_t * TIM4_SR  = (uint32_t *) 0x40000810;
+  volatile uint32_t * TIM4_CCMR_IN1 = (uint32_t *)0x40000818;
+  volatile uint32_t * TIM4_CCER    = (uint32_t *)0x40000820;
+  volatile uint32_t * TIM4_ARR = (uint32_t *)0x4000042c;
 
   *TIM4_CR1 = 1;
   *TIM4_SR  = 0x1f;
@@ -1349,11 +1351,11 @@ void USARTSetup(){
 
 // Enable DMA between USART3 and RAM
 // So note values will be instantly recorded in circular buffers.
-uint32_t * DMA1_IFCR = (uint32_t *)   0x40020004;
-uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
-uint32_t * DMA1_CPAR = (uint32_t *)   0x40020038;
-uint32_t * DMA1_CMAR = (uint32_t *)   0x4002003c;
-uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
+volatile uint32_t * DMA1_IFCR = (uint32_t *)   0x40020004;
+volatile uint32_t * DMA1_CCR3 = (uint32_t *)   0x40020030;
+volatile uint32_t * DMA1_CPAR = (uint32_t *)   0x40020038;
+volatile uint32_t * DMA1_CMAR = (uint32_t *)   0x4002003c;
+volatile uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
 // Clear all DMA issues.
 *DMA1_IFCR = 0xFFFFFFFF;
 *DMA1_CPAR = 0x40004804;
@@ -1362,10 +1364,10 @@ uint32_t * DMA1_CNDTR = (uint32_t *)  0x40020034;
 // Circular buffer, high priority.
 *DMA1_CCR3 = 0x000030a1; // Must be inited last.
 
-uint32_t * USART3_CR1 = (uint32_t *) 0x4000480c;
-uint32_t * USART3_CR2 = (uint32_t *) 0x40004810;
-uint32_t * USART3_CR3 = (uint32_t *) 0x40004814;
-uint32_t * USART3_BAUD= (uint32_t *) 0x40004808;
+volatile uint32_t * USART3_CR1 = (uint32_t *) 0x4000480c;
+volatile uint32_t * USART3_CR2 = (uint32_t *) 0x40004810;
+volatile uint32_t * USART3_CR3 = (uint32_t *) 0x40004814;
+volatile uint32_t * USART3_BAUD= (uint32_t *) 0x40004808;
 *USART3_CR1  = 0b10000000000000;
 delay(1);
 *USART3_CR1 |= 0b1000000000000;
@@ -1393,14 +1395,14 @@ void ADCSetup(){
   // We expect this is done in USART Setup already.
 
   // Configure ADC1 (analog to digital converter)
-  uint32_t * RCC_APB2ENR = (uint32_t *) 0x40021018;
+  volatile uint32_t * RCC_APB2ENR = (uint32_t *) 0x40021018;
   *RCC_APB2ENR = 0x427d;
 
   // Configure DMA1_1 to read off ADC1 values.
-  uint32_t * DMA1_CNDTR = (uint32_t *) 0x4002000c;
-  uint32_t * DMA1_CPAR = (uint32_t *) 0x40020010;
-  uint32_t * DMA1_CMAR = (uint32_t *) 0x40020014;
-  uint32_t * DMA_CCR1 = (uint32_t *) 0x40020008;
+  volatile uint32_t * DMA1_CNDTR = (uint32_t *) 0x4002000c;
+  volatile uint32_t * DMA1_CPAR = (uint32_t *) 0x40020010;
+  volatile uint32_t * DMA1_CMAR = (uint32_t *) 0x40020014;
+  volatile uint32_t * DMA_CCR1 = (uint32_t *) 0x40020008;
 
   *DMA1_CNDTR = 0x10;
   // Copy from ADC1
@@ -1411,14 +1413,14 @@ void ADCSetup(){
   *DMA_CCR1= 0x25a1;
 
 
-  uint32_t * ADC1_SR     = (uint32_t *) 0x40012400;
-  uint32_t * ADC1_CR1    = (uint32_t *) 0x40012404;
-  uint32_t * ADC1_CR2    = (uint32_t *) 0x40012408;
-  uint32_t * ADC1_SMP2   = (uint32_t *) 0x40012410;
-  uint32_t * ADC1_WatchH = (uint32_t *) 0x40012424;
-  uint32_t * ADC1_SQR1   = (uint32_t *) 0x4001242c;
-  uint32_t * ADC1_SQR2   = (uint32_t *) 0x40012430;
-  uint32_t * ADC1_SQR3   = (uint32_t *) 0x40012434;
+  volatile uint32_t * ADC1_SR     = (uint32_t *) 0x40012400;
+  volatile uint32_t * ADC1_CR1    = (uint32_t *) 0x40012404;
+  volatile uint32_t * ADC1_CR2    = (uint32_t *) 0x40012408;
+  volatile uint32_t * ADC1_SMP2   = (uint32_t *) 0x40012410;
+  volatile uint32_t * ADC1_WatchH = (uint32_t *) 0x40012424;
+  volatile uint32_t * ADC1_SQR1   = (uint32_t *) 0x4001242c;
+  volatile uint32_t * ADC1_SQR2   = (uint32_t *) 0x40012430;
+  volatile uint32_t * ADC1_SQR3   = (uint32_t *) 0x40012434;
 
   *ADC1_SR =  0x10;
   //*ADC1_CR1 = 0x100;
@@ -1435,9 +1437,9 @@ void ADCSetup(){
   *ADC1_CR2 = 0x5E0103;
 
   // GPIOE to pick initial group.
-  uint32_t * GPIOE_CRL   = (uint32_t *)0x40011800;
-  uint32_t * GPIOE_CRH   = (uint32_t *)0x40011804;
-  uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
+  volatile uint32_t * GPIOE_CRL   = (uint32_t *)0x40011800;
+  volatile uint32_t * GPIOE_CRH   = (uint32_t *)0x40011804;
+  volatile uint32_t * GPIOE_ODR   = (uint32_t *)0x4001180c;
 
   *GPIOE_CRL = 0x22222222;
   *GPIOE_CRH = 0x22224248;
@@ -1462,13 +1464,13 @@ void SPISetup(){
   // We expect this is done in USART Setup already.
   // Configure GPIOE so pad LEDS are on
   // We expect this is done already.
-  uint32_t * GPIOB_CRL   = (uint32_t *)0x40010c00;
-  uint32_t * GPIOB_CRH   = (uint32_t *)0x40010c04;
+  volatile uint32_t * GPIOB_CRL   = (uint32_t *)0x40010c00;
+  volatile uint32_t * GPIOB_CRH   = (uint32_t *)0x40010c04;
   *GPIOB_CRL = 0x44b84222;
   *GPIOB_CRH = 0xa8a22444;
 
-  uint32_t * SPI2_CR1   = (uint32_t *)0x40003800;
-  uint32_t * SPI2_X     = (uint32_t *)0x40003804;
+  volatile uint32_t * SPI2_CR1   = (uint32_t *)0x40003800;
+  volatile uint32_t * SPI2_X     = (uint32_t *)0x40003804;
 
   *SPI2_CR1 = 0x0000037c;
   //*SPI2_X   = 0b111;
@@ -1572,17 +1574,17 @@ void TIM2Setup(){
 // This handles both pad color animation and
 // fetching button state from SPI2.
 extern "C" void TIM2_IRQHandler(){
-  uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
-  uint32_t * DMA1_4CPAR   = (uint32_t *)0x4002004c;
-  uint32_t * DMA1_4CMAR   = (uint32_t *)0x40020050;
-  uint32_t * DMA1_4CNDT   = (uint32_t *)0x40020048;
+  volatile uint32_t * DMA1_4CCR    = (uint32_t *)0x40020044;
+  volatile uint32_t * DMA1_4CPAR   = (uint32_t *)0x4002004c;
+  volatile uint32_t * DMA1_4CMAR   = (uint32_t *)0x40020050;
+  volatile uint32_t * DMA1_4CNDT   = (uint32_t *)0x40020048;
 
-  uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
-  uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
-  uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
-  uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
+  volatile uint32_t * DMA1_5CCR    = (uint32_t *)0x40020058;
+  volatile uint32_t * DMA1_5CPAR   = (uint32_t *)0x40020060;
+  volatile uint32_t * DMA1_5CMAR   = (uint32_t *)0x40020064;
+  volatile uint32_t * DMA1_5CNDT   = (uint32_t *)0x4002005c;
 
-  uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
+  volatile uint32_t * GPIOB_ODR    = (uint32_t *)0x40010c0c;
 
   uint32_t Frame1       = 0x200019d0;
   uint32_t Frame2       = 0x200019e0;
@@ -1666,8 +1668,31 @@ enum AFIOOptions{AFIO_PartialRemap_TIM3 = 0b100000000000, AFIO_Remap_TIM4=0b1000
 AFIO_FullRemap_USART3 = 0b110000 };
 
 void EnableAFIO(AFIOOptions o){
-  uint32_t * AFIO_MAPR = (uint32_t *)0x40010004;
+  volatile uint32_t * AFIO_MAPR = (uint32_t *)0x40010004;
   *AFIO_MAPR |= o;
+}
+
+enum APB2Options{APB2_AFIO,APB2_nop1,APB2_IOA, APB2_IOB, APB2_IOC, APB2_IOD,
+APB2_IOE, APB2_IOF, APB2_IOG, APB2_ADC1, APB2_ADC2, APB2_TIM1, APB2_SPI1,
+APB2_TIM8, APB2_USART, APB2_ADC3, APB2_nop2, APB2_nop3, APB2_nop4,
+APB2_TIM9, APB2_TIM10, APB2_TIM11};
+
+void EnableAPB2(APB2Options o){
+  volatile uint32_t * RCC_APB2ENR = (uint32_t *)0x40021018;
+  uint32_t option = 1 << o;
+  *RCC_APB2ENR |= option;
+}
+
+enum APB1Options{APB1_TIM2,APB1_TIM3,APB1_TIM4,APB1_TIM5,APB1_TIM6,
+APB1_TIM7,APB1_TIM12,APB1_TIM13, APB1_TIM14, ABP1_nop1, ABP1_nop2,
+APB1_WWD, APB1_nop4, APB1_nop5, APB1_SPI2, APB1_SPI3, APB1_nop6,
+APB1_USART2, APB1_USART3, APB1_UART4, APB1_UART5, APB1_I2C1, APB1_I2C2,
+APB1_USB, APB1_nop7, APB1_CAN, APB1_nop8, APB1_BKP, APB1_PWR, APB1_DAC};
+
+void EnableAPB1(APB1Options o){
+  volatile uint32_t * RCC_APB1ENR = (uint32_t *)0x4002101c;
+  uint32_t option = 1 << o;
+  *RCC_APB1ENR |= option;
 }
 
 int start() {
@@ -1680,19 +1705,29 @@ int start() {
     //NVIC_InitStructure.NVIC_IRQChannel = USB_LP_CAN1_RX0_IRQn ;
 
     // enable clock on APB2
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,  ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,  ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC,  ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,  ENABLE);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB,  ENABLE);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC,  ENABLE);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
+    EnableAPB2(APB2_IOA);
+    EnableAPB2(APB2_IOB);
+    EnableAPB2(APB2_IOC);
+    EnableAPB2(APB2_IOD);
+
     //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE,  ENABLE);
 
    // The three things you need to do to hook up Tim3_ch2
    // PortB5 output. Where the LCD potentiometer is connected.
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+    EnableAPB1(APB1_TIM3);
+    EnableAPB1(APB1_TIM4);
+
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    EnableAPB2(APB2_AFIO);
     // Enable SPI2 for sending colors to top of keyboard.
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+    EnableAPB1(APB1_SPI2);
     //GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
     EnableAFIO(AFIO_PartialRemap_TIM3);
     //GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
@@ -1700,7 +1735,8 @@ int start() {
 
     // Turn on USART3 for keybed signals routing.
     //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);//?
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    EnableAPB1(APB1_USART3);
     // Enable DMA1 clock.
     RCC->AHBENR |= (1 << 0);
 
@@ -1726,11 +1762,12 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Gretchen  ");
+    writeString((char*)"  I <3 baby  ");
 
     // usb init
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
+    EnableAPB1(APB1_USB);
+    //RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD,  ENABLE);
     NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn );
 
 
@@ -1746,7 +1783,10 @@ int start() {
   	//DMA1_Channel5_IRQHandler();
     //NVIC_EnableIRQ(	DMA1_Channel5_IRQn);
     SetupPadColorFrames();
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    //RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    EnableAPB1(APB1_TIM2);
+    //volatile uint32_t * RCC_APB1ENR = (uint32_t *)0x4002101c;
+    //*RCC_APB1ENR |=1;
     TIM2Setup();
     NVIC_EnableIRQ(TIM2_IRQn );
 
