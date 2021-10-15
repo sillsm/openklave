@@ -920,6 +920,7 @@ void CheckButtonsPushed(){
   uint32_t SButtons = *(GlobalButtonRamLocation+1) &0xFF;
   // One is button pressed, Zero is button up.
   // SButtons start not pressed.
+  /*
   static uint32_t SButtonStates[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   for (int i = 0; i<8; i++){
       if (((~SButtons) & (1 << i)) && (SButtonStates[i] == 0)) {
@@ -934,9 +935,36 @@ void CheckButtonsPushed(){
         Event e = {301,0,(uint32_t)i,0};
         PushEvent(GlobalEventStack, e);
       }
+  }*/
 
+  // Hold the 32 button states from the left word in a single uint_32.
+  // Actual button maps are accessible in kernel.h as named constants.
+  //static uint64_t bigboy= 0;
+  static uint64_t buttonState = 0;
+  uint64_t firstPiece   = (uint64_t)(~(*GlobalButtonRamLocation));
+  uint64_t secondPiece  = (uint64_t)((~(*(GlobalButtonRamLocation+1)))&0xffff);
+  uint64_t currentState = firstPiece | (secondPiece << 32);
+  for (uint64_t i = 0; i<64; i++){
+        uint64_t one = 1; // stupid integer promotion
+      // if button is pressed, but we don't think it is, press it.
+      if (((one << i) & currentState) && !((one << i) & buttonState)) {
+        buttonState |= one << i;
+        Event e = {300,0,(uint32_t)i,0};
+        PushEvent(GlobalEventStack, e);
+      }
+      // if button is not pressed, but we think it is, unpress it.
+
+      if (!((one << i) & currentState) && ((one << i) & buttonState)) {
+        // Random button down event
+        buttonState ^= one << i;
+        Event e = {301,0,(uint32_t)i,0};
+        PushEvent(GlobalEventStack, e);
+      }
   }
 
+  // Special state-machine just to handle the push-to-enter knob twisting
+  // left or right. Maybe this should be refactored to a separate routine
+  // for clarity.
   enum pastState{p_none = 0xff00, p_a = 0xef00, p_b = 0xe700, p_c=0xf700};
   enum currState{c_none = 0x00ff, c_a = 0x00ef, c_b = 0x00e7, c_c=0x00f7};
   enum direction{none = 0x010000, left= 0x100000, right = 0x110000};
@@ -983,7 +1011,7 @@ void CheckButtonsPushed(){
       return;
     case p_c | c_none | right:{
        //fire a right
-      Event e = {300,91,40,0};
+      Event e = {300,91,71,0};
       PushEvent(GlobalEventStack, e);
       d = none;
       p = p_none;
@@ -997,7 +1025,7 @@ void CheckButtonsPushed(){
       return;
     case (p_a | c_none | left):{
        //fire left
-      Event e = {300,91,39,0};
+      Event e = {300,91,70,0};
       PushEvent(GlobalEventStack, e);
       d = none;
       p = p_none;
@@ -1110,12 +1138,12 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
 
     // button down
     if (e.A == 300){
-      val = 40 + e.C;
+      val = 0 + e.C;
       velocity = 88;
     }
     // button up
     if (e.A == 301){
-       val = 40 + e.C;
+       val = 0 + e.C;
        noteChannel = 121 | (128 << 8);// Note off, Channel 1, M type 0x2, group 0
     }
     // keybed key down
