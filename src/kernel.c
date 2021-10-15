@@ -937,7 +937,82 @@ void CheckButtonsPushed(){
 
   }
 
+  enum pastState{p_none = 0xff00, p_a = 0xef00, p_b = 0xe700, p_c=0xf700};
+  enum currState{c_none = 0x00ff, c_a = 0x00ef, c_b = 0x00e7, c_c=0x00f7};
+  enum direction{none = 0x010000, left= 0x100000, right = 0x110000};
+
+  static pastState  p = p_none;
+  static currState  c = c_none;
+  static direction  d = none;
+  volatile uint32_t * GPIOD_IN = (uint32_t *)0x40011408;
+  volatile uint32_t val = ((*GPIOD_IN)) & 0xff;
+
+  // Need this switch because casting blows up binary size for some reason.
+  switch (val){
+    case (0x00ff):
+      c = c_none;
+      break;
+    case (0x00ef):
+      c = c_a;
+      break;
+    case (0x00e7):
+      c = c_b;
+      break;
+    case (0x00f7):
+      c = c_c;
+      break;
+  }
+
+  // State machine. Product states of past state, current state, direction.
+  switch(p | c){
+    case (p_none | c_a):
+      p = p_a;
+      d = right;
+      return;
+    case (p_none | c_c):
+      p = p_c;
+      d = left;
+      return;
+  }
+  switch (p | c | d ) {
+    case (p_a | c_b | right):
+      p = p_b;
+      return;
+    case (p_b | c_c | right):
+      p = p_c;
+      return;
+    case p_c | c_none | right:{
+       //fire a right
+      Event e = {300,91,40,0};
+      PushEvent(GlobalEventStack, e);
+      d = none;
+      p = p_none;
+      return;
+    }
+    case (p_c | c_b | left):
+      p = p_b;
+      return;
+    case (p_b | c_a | left):
+      p = p_a;
+      return;
+    case (p_a | c_none | left):{
+       //fire left
+      Event e = {300,91,39,0};
+      PushEvent(GlobalEventStack, e);
+      d = none;
+      p = p_none;
+      return;
+    }
+    default:
+      // nop no changes
+      if (p == (c<<8)) {return;}
+      // otherwise incomplete action, reset.
+      d = none;
+      p = p_none;
+  }
+
 }
+
 unsigned int decodeMPK249NoteValue(uint32_t u){
   // magic number map. The reported value of the note
   // from the keybed
