@@ -1126,7 +1126,7 @@ void CheckButtonsPushed(){
       return;
     case p_c | c_none | right:{
        //fire a right
-      Event e = {300,91,71,0};
+      Event e = {501,91,71,0};
       PushEvent(GlobalEventStack, e);
       d = none;
       p = p_none;
@@ -1140,7 +1140,7 @@ void CheckButtonsPushed(){
       return;
     case (p_a | c_none | left):{
        //fire left
-      Event e = {300,91,70,0};
+      Event e = {500,91,70,0};
       PushEvent(GlobalEventStack, e);
       d = none;
       p = p_none;
@@ -1312,6 +1312,21 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       val = e.C;
       noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
     }
+
+    // Infinite rotary encoder 65/1 cc events
+    //left
+    if ((e.A)== 500){
+      velocity = 65;
+      val = 80;
+      noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
+    }
+    //right
+    if ((e.A)== 501){
+      velocity = 1;
+      val = 80;
+      noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
+    }
+
 
 
   // 144 120 100
