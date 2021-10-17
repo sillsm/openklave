@@ -831,20 +831,32 @@ void CheckPitchWheel(){
   volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
   volatile uint16_t currentVoltage = *(ADCBase +7);
 
-  uint16_t maxVoltage = 0xfd7;
-  uint16_t minVoltage = 0x20;
+  uint16_t maxVoltage = 0xfd7; //-> 0x3fff
+  uint16_t minVoltage = 0x20;  //-> 0
   uint16_t scaleSize  = (maxVoltage - minVoltage);
 
-  // cut up the detectable voltage range into 200 ticks.
-  uint16_t currentPitchValue = ((currentVoltage-minVoltage) * 200)/scaleSize;
+  // Mapped Scale is MAX 0x3fff MIN 0.
+  // (currentVoltage-minVoltage)/scaleSize = x/ mappedScale
+  // mappedScale* (currentVoltage-minVoltage)/scaleSize;
+
+  uint16_t currentPitchValue = ((currentVoltage-minVoltage))*100/scaleSize;
   if (currentPitchValue != lastPitchValue){
     // Emit pitchbender event
 
     // Map the internal PitchValue to a bigger scale.
-    uint32_t mappedPitch = (uint32_t)currentPitchValue;// * 81.915;
+    uint32_t mappedPitch = (uint32_t)currentPitchValue*81.92*4;
     // We have a number between 0 and 200.
+    uint32_t leftVal = ((mappedPitch & 0xFF00)>>8) + 3;
+    if (leftVal > 2*0x3f){leftVal = 0x3f*2;}
 
-    Event e = {200, (mappedPitch & 0xFF),((mappedPitch & 0xFF00))<<8, 0};
+
+    //Event e = {200, (mappedPitch & 0xFF),((mappedPitch & 0xFF00))>>8, 0};
+    // Remember, each of MSB and LSB caps at 7F.
+    //Event e = {200,0x60,0x12, 0};
+    Event e = {200, leftVal,((mappedPitch & 0xff)), 0};
+
+    // Take a number 0 to 200. Make it between 0 and 16383. And double that.
+    // so multiply it by 2 * (16383/200).
     //Event e = {200,0x21, 0x22, 0};
     PushEvent(GlobalEventStack, e);
     lastPitchValue= currentPitchValue;
