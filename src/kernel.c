@@ -865,6 +865,36 @@ void CheckPitchWheel(){
   return;
 }
 
+void CheckModWheel(){
+  // Pitch is a little jittery so we need to smooth it out with a
+  // window.
+  static uint16_t lastModValue = 0;
+  volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
+  volatile uint16_t currentVoltage = *(ADCBase +7);
+
+  uint16_t maxVoltage = 0xf6d; //-> 0x3fff
+  uint16_t minVoltage = 0x8;  //-> 0
+  uint16_t scaleSize  = (maxVoltage - minVoltage);
+
+  // Mapped Scale is MAX 0x3fff MIN 0.
+  // (currentVoltage-minVoltage)/scaleSize = x/ mappedScale
+  // mappedScale* (currentVoltage-minVoltage)/scaleSize;
+  // Clamp
+  uint16_t currentPitchValue = ((((currentVoltage) /2) + (16*4))&0xFF0)>>4;
+  if (currentPitchValue > maxVoltage){currentPitchValue = 0x7f;}
+  if (currentPitchValue < 0){currentPitchValue = 0;}
+
+
+  if (currentPitchValue != lastModValue){
+
+    Event e = {201, 1,currentPitchValue, 0};
+    PushEvent(GlobalEventStack, e);
+    lastModValue= currentPitchValue;
+    return;
+  }
+  return;
+}
+
 // Gets called after every ADC1 conversion event is complete.
 //extern "C"{
  //void ADC1_2_IRQHandler(){
@@ -927,7 +957,7 @@ void CheckPitchWheel(){
 
    if (wait == 6){
    // Switch and wait 20 clock cycles.
-
+     CheckModWheel();
      CompareAndSetPad(4, *pada);
      CompareAndSetPad(5, *padb);
      CompareAndSetPad(6, *padc);
@@ -1228,6 +1258,12 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       velocity = e.B;
       val = e.C;
       noteChannel = 121 | (0b11100000 << 8); // pitchbend chan 1.
+    }
+    // Mod Wheel
+    if ((e.A)== 201){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (0b10110000 << 8); // modwheel chan 1.
     }
 
 
