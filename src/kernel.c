@@ -897,6 +897,37 @@ void CheckModWheel(){
   return;
 }
 
+// Check a given fader
+void CheckFader(int whichFader){
+  static uint16_t lastModValue[8] = {0,0,0,0,0,0,0,0};
+  volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
+  volatile uint16_t currentVoltage = *(ADCBase +6);
+
+  uint16_t maxVoltage = 0xfbb; //-> 0x3fff
+  uint16_t minVoltage = 0x0;  //-> 0
+  uint16_t scaleSize  = (maxVoltage - minVoltage);
+
+  // Mapped Scale is MAX 0x3fff MIN 0.
+  // (currentVoltage-minVoltage)/scaleSize = x/ mappedScale
+  // mappedScale* (currentVoltage-minVoltage)/scaleSize;
+  // Clamp
+  //uint16_t currentPitchValue = ((((currentVoltage-50) /2) + (16*6))&0xFF0)>>4;
+  uint16_t currentPitchValue = currentVoltage;
+  currentPitchValue = (((uint16_t)(currentPitchValue/1.98)) &0xff0)>>4;
+  if (currentPitchValue > maxVoltage){currentPitchValue = 0x7f;}
+  if (currentVoltage <= minVoltage){currentPitchValue = 0;}
+
+  if (currentPitchValue != lastModValue[whichFader]){
+
+    Event e = {251, currentPitchValue, 0b0001001 , 0};
+    PushEvent(GlobalEventStack, e);
+    lastModValue[whichFader]= currentPitchValue;
+    return;
+  }
+  return;
+
+}
+
 // Gets called after every ADC1 conversion event is complete.
 //extern "C"{
  //void ADC1_2_IRQHandler(){
@@ -960,6 +991,7 @@ void CheckModWheel(){
    if (wait == 6){
    // Switch and wait 20 clock cycles.
      CheckModWheel();
+     CheckFader(0);
      CompareAndSetPad(4, *pada);
      CompareAndSetPad(5, *padb);
      CompareAndSetPad(6, *padc);
@@ -1271,6 +1303,13 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       velocity = e.B;
       val = e.C;
       noteChannel = 121 | (0b10110000 << 8); // modwheel chan 1.
+    }
+
+    // Fader
+    if ((e.A)== 251){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
     }
 
 
