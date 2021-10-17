@@ -1019,6 +1019,11 @@ void CheckButtonsPushed(){
   uint64_t secondPiece  = (uint64_t)((~(*(GlobalButtonRamLocation+1)))&0xffff);
   uint64_t currentState = firstPiece | (secondPiece << 32);
 
+  // TODO(max)
+  // There may be situations where this is called before the SPI2 is inited.
+  // This is a kudge and should be fixed.
+  if (firstPiece == 0xFFFFFFFF){return;}
+
   // Todo, parcel this out into smaller chunks because its too long
   // or too often for an interrupt based on blinking pad lights.
   for (uint64_t i = 0; i<64; i++){
@@ -1187,7 +1192,7 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
 
   // TODO: Period collecting of all keyboard signals needs to be
   // refactored to a timer interrut.
-  CollectAllKeyboardSignals();
+
 
   if (IsEventStackEmpty(GlobalEventStack)){
     state = USBEndpointState{*USB_EP1R, 0, 0, 0, NAK, VALID, INTERRUPT, 1 };
@@ -1783,8 +1788,15 @@ extern "C" void TIM2_IRQHandler(){
   uint32_t Frame2       = 0x200019e0;
   uint32_t Frame3       = 0x200019f0;
 
+
+
   static int i = -1;
   i++;
+
+  if (i %2 == 1){
+    CollectAllKeyboardSignals(); // collect signals every 2 tick interrupt
+    // but we don't do the first cycle so we give some time to init.
+  }
 
   if (i == 0){
 
@@ -1955,7 +1967,7 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Gretchen  ");
+    writeString((char*)"  I <3 Fetchen  ");
 
     // usb init
     //RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
