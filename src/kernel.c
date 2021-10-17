@@ -823,6 +823,36 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
   return;
 }
 
+// Updates PitchWheel status.
+void CheckPitchWheel(){
+  // Pitch is a little jittery so we need to smooth it out with a
+  // window.
+  static uint16_t lastPitchValue = 0;
+  volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
+  volatile uint16_t currentVoltage = *(ADCBase +7);
+
+  uint16_t maxVoltage = 0xfd7;
+  uint16_t minVoltage = 0x20;
+  uint16_t scaleSize  = (maxVoltage - minVoltage);
+
+  // cut up the detectable voltage range into 200 ticks.
+  uint16_t currentPitchValue = ((currentVoltage-minVoltage) * 200)/scaleSize;
+  if (currentPitchValue != lastPitchValue){
+    // Emit pitchbender event
+
+    // Map the internal PitchValue to a bigger scale.
+    uint32_t mappedPitch = (uint32_t)currentPitchValue;// * 81.915;
+    // We have a number between 0 and 200.
+
+    Event e = {200, (mappedPitch & 0xFF),((mappedPitch & 0xFF00))<<8, 0};
+    //Event e = {200,0x21, 0x22, 0};
+    PushEvent(GlobalEventStack, e);
+    lastPitchValue= currentPitchValue;
+    return;
+  }
+  return;
+}
+
 // Gets called after every ADC1 conversion event is complete.
 //extern "C"{
  //void ADC1_2_IRQHandler(){
@@ -901,7 +931,7 @@ void CompareAndSetPad(int Pad, uint16_t valToCompare){
 
    // Switch and wait 20 clock cycles.
    if (wait==8){
-
+     CheckPitchWheel();
      CompareAndSetPad(0, *pada);
      CompareAndSetPad(1, *padb);
      CompareAndSetPad(2, *padc);
@@ -944,6 +974,9 @@ void CheckButtonsPushed(){
   uint64_t firstPiece   = (uint64_t)(~(*GlobalButtonRamLocation));
   uint64_t secondPiece  = (uint64_t)((~(*(GlobalButtonRamLocation+1)))&0xffff);
   uint64_t currentState = firstPiece | (secondPiece << 32);
+
+  // Todo, parcel this out into smaller chunks because its too long
+  // or too often for an interrupt based on blinking pad lights.
   for (uint64_t i = 0; i<64; i++){
         uint64_t one = 1; // stupid integer promotion
       // if button is pressed, but we don't think it is, press it.
@@ -1165,6 +1198,7 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       val = e.C;
       noteChannel = 121 | (144 << 8); // Note on.
     }
+    //0b1111001
     // Pad Off
     if ((e.A)== 901){
       velocity = e.B;
@@ -1176,6 +1210,12 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
       velocity = e.B;
       val = e.C;
       noteChannel = 121 | (0b10100001 << 8); // note on channel pressure.
+    }
+    // Pitch wheel
+    if ((e.A)== 200){
+      velocity = e.B;
+      val = e.C;
+      noteChannel = 121 | (0b11100000 << 8); // pitchbend chan 1.
     }
 
 
@@ -1642,17 +1682,17 @@ void SetupPadColorFrames(){
     uint32_t * info = (uint32_t *)0x200019d0;
     info[0] = f1.one;
     info[1] = f1.two;
-    info[2] = f1.three;
+    info[2] = 0xffffffff;
 
     info= (uint32_t *)0x200019e0;
     info[0] = f2.one;
     info[1] = f2.two;
-    info[2] = f2.three;
+    info[2] = 0xffffffff;
 
     info= (uint32_t *)0x200019f0;
     info[0] = f3.one;
     info[1] = f3.two;
-    info[2] = f3.three;
+    info[2] = 0xffffffff;
 }
 
 
