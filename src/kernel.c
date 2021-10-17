@@ -919,7 +919,7 @@ void CheckFader(int whichFader){
 
   if (currentPitchValue != lastModValue[whichFader]){
 
-    Event e = {251, currentPitchValue, 0b0001001 , 0};
+    Event e = {251, currentPitchValue, whichFader+16 , 0};
     PushEvent(GlobalEventStack, e);
     lastModValue[whichFader]= currentPitchValue;
     return;
@@ -959,7 +959,7 @@ void CheckFader(int whichFader){
  }
 
    if (wait == 2){
-
+     CheckFader(5);
      CompareAndSetPad(12, *pada);
      CompareAndSetPad(13, *padb);
      CompareAndSetPad(14, *padc);
@@ -1007,6 +1007,7 @@ void CheckFader(int whichFader){
 
    // Switch and wait 20 clock cycles.
    if (wait==8){
+     CheckFader(1);
      CheckPitchWheel();
      CompareAndSetPad(0, *pada);
      CompareAndSetPad(1, *padb);
