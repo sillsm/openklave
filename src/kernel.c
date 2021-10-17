@@ -880,14 +880,16 @@ void CheckModWheel(){
   // (currentVoltage-minVoltage)/scaleSize = x/ mappedScale
   // mappedScale* (currentVoltage-minVoltage)/scaleSize;
   // Clamp
-  uint16_t currentPitchValue = ((((currentVoltage) /2) + (16*4))&0xFF0)>>4;
+  //uint16_t currentPitchValue = ((((currentVoltage-50) /2) + (16*6))&0xFF0)>>4;
+  uint16_t currentPitchValue = currentVoltage -8;
+  currentPitchValue = (((uint16_t)(currentPitchValue/1.94)) &0xff0)>>4;
   if (currentPitchValue > maxVoltage){currentPitchValue = 0x7f;}
-  if (currentPitchValue < 0){currentPitchValue = 0;}
+  if (currentVoltage <= minVoltage){currentPitchValue = 0;}
 
 
   if (currentPitchValue != lastModValue){
 
-    Event e = {201, 1,currentPitchValue, 0};
+    Event e = {201, currentPitchValue, 1 , 0};
     PushEvent(GlobalEventStack, e);
     lastModValue= currentPitchValue;
     return;
