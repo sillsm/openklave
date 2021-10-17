@@ -919,7 +919,7 @@ void CheckFader(int whichFader){
 
   if (currentPitchValue != lastModValue[whichFader]){
 
-    Event e = {251, currentPitchValue, whichFader+16 , 0};
+    Event e = {251, currentPitchValue, (uint32_t)(whichFader)+16 , 0};
     PushEvent(GlobalEventStack, e);
     lastModValue[whichFader]= currentPitchValue;
     return;
@@ -952,7 +952,7 @@ void CheckFader(int whichFader){
 
    static uint32_t wait = 0;
    wait++;
-   if (wait == 9){wait=0; return;}
+   if (wait == 17){wait=0; return;}
 
    if (wait == 1){
    *GPIOE_ODR = 0x5157;
@@ -974,7 +974,7 @@ void CheckFader(int whichFader){
    }
 
    if (wait==4){
-
+    CheckFader(4);
     CompareAndSetPad(8, *pada);
     CompareAndSetPad(9, *padb);
     CompareAndSetPad(10, *padc);
@@ -1015,6 +1015,50 @@ void CheckFader(int whichFader){
      CompareAndSetPad(3, *padd);
      return;
  }
+
+if (wait==9){
+// Switch and wait 20 clock cycles.
+  *GPIOE_ODR = 0x513e;
+  return;
+}
+
+if (wait==10){
+  CheckFader(3);
+  return;
+}
+
+if (wait==11){
+// Switch and wait 20 clock cycles.
+  *GPIOE_ODR = 0x512e;
+  return;
+}
+
+if (wait==12){
+  CheckFader(2);
+  return;
+}
+if (wait==13){
+// Switch and wait 20 clock cycles.
+  *GPIOE_ODR = 0x516d;
+  return;
+}
+
+if (wait==14){
+  CheckFader(6);
+  return;
+}
+if (wait==15){
+// Switch and wait 20 clock cycles.
+  *GPIOE_ODR = 0x517d;
+  return;
+}
+
+if (wait==16){
+  CheckFader(7);
+  return;
+}
+
+
   return;
 }
 //}
