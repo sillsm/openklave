@@ -925,6 +925,41 @@ void CheckFader(int whichFader){
     return;
   }
   return;
+}
+
+// Check a given fader
+void CheckKnob(int whichKnob){
+  static uint16_t lastModValue[8] = {0,0,0,0,0,0,0,0};
+  volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
+  volatile uint16_t currentVoltage = *(ADCBase +5);
+  volatile uint16_t currentSign= *(ADCBase +4);
+
+
+  if ((currentSign > 780)  && (currentVoltage > 1)) {
+    currentVoltage = 0xfb6 + (0xfb6 - currentVoltage);
+    currentVoltage = (currentVoltage &0xFFF0)>>4;
+  }
+  uint16_t currentPitchValue = currentVoltage;
+
+  if (currentPitchValue != lastModValue[whichKnob]){
+    //fire a right
+     if (currentPitchValue > lastModValue[whichKnob])  {
+        Event e = {501,91,71,0};
+        PushEvent(GlobalEventStack, e);
+       lastModValue[whichKnob]= currentPitchValue;
+       return;
+      }
+     //fire left
+     if (currentPitchValue < lastModValue[whichKnob]) {
+     Event e = {500,91,70,0};
+     PushEvent(GlobalEventStack, e);
+     lastModValue[whichKnob]= currentPitchValue;
+     return;
+   }
+
+    return;
+  }
+  return;
 
 }
 
@@ -992,6 +1027,7 @@ void CheckFader(int whichFader){
    // Switch and wait 20 clock cycles.
      CheckModWheel();
      CheckFader(0);
+     CheckKnob(0);
      CompareAndSetPad(4, *pada);
      CompareAndSetPad(5, *padb);
      CompareAndSetPad(6, *padc);
