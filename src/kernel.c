@@ -934,12 +934,19 @@ void CheckKnob(int whichKnob){
   volatile uint16_t currentVoltage = *(ADCBase +5);
   volatile uint16_t currentSign= *(ADCBase +4);
 
+  volatile uint16_t * DEBUG = (uint16_t *) 0x20002cb6;
+  *(DEBUG+4)= currentSign;
+  *(DEBUG+5)= currentVoltage;
 
-  if ((currentSign > 780)  && (currentVoltage > 1)) {
+
+  if ((currentSign > 0x780)  && (currentVoltage > 1)) {
     currentVoltage = 0xfb6 + (0xfb6 - currentVoltage);
-    currentVoltage = (currentVoltage &0xFFF0)>>4;
   }
+  currentVoltage = currentVoltage/32;
   uint16_t currentPitchValue = currentVoltage;
+
+  *(DEBUG)  = currentPitchValue;
+
 
   if (currentPitchValue != lastModValue[whichKnob]){
     //fire a right
@@ -2102,7 +2109,7 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Fetchen  ");
+    writeString((char*)"  I <3 Gretchen  ");
 
     // usb init
     //RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
