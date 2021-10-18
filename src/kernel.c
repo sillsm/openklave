@@ -942,28 +942,35 @@ void CheckKnob(int whichKnob){
   if ((currentSign > 0x780)  && (currentVoltage > 1)) {
     currentVoltage = 0xfb6 + (0xfb6 - currentVoltage);
   }
+  // Get a byte value between 0 and 0xFF.
+  // This also considerably smooths voltage readings.
+  // Go for a bigger range if you want more granularity in the
+  // twisting action.
   currentVoltage = currentVoltage/32;
   uint16_t currentPitchValue = currentVoltage;
 
   *(DEBUG)  = currentPitchValue;
 
+  uint16_t lastValue = lastModValue[whichKnob];
+  if (currentPitchValue != lastValue){
+    *(DEBUG+6)= lastModValue[whichKnob];
+     // fire right
+     if (((currentPitchValue > lastValue) && ((currentPitchValue - lastValue) < 0x8) )
+     | ((currentPitchValue<0x10) && (lastValue>0xf8))) {
 
-  if (currentPitchValue != lastModValue[whichKnob]){
-    //fire a right
-     if (currentPitchValue > lastModValue[whichKnob])  {
-        Event e = {501,91,71,0};
+        Event e = {501,91,(uint32_t)whichKnob,0};
         PushEvent(GlobalEventStack, e);
        lastModValue[whichKnob]= currentPitchValue;
        return;
       }
-     //fire left
-     if (currentPitchValue < lastModValue[whichKnob]) {
-     Event e = {500,91,70,0};
+     // fire left
+     if (((currentPitchValue < lastValue) &&  ((lastValue - currentPitchValue) < 0x8) )
+     | ((currentPitchValue>0xf8) && (lastValue<0x10))) {
+     Event e = {500,91,(uint32_t)whichKnob,0};
      PushEvent(GlobalEventStack, e);
      lastModValue[whichKnob]= currentPitchValue;
      return;
    }
-
     return;
   }
   return;
@@ -1002,6 +1009,7 @@ void CheckKnob(int whichKnob){
 
    if (wait == 2){
      CheckFader(5);
+     CheckKnob(5);
      CompareAndSetPad(12, *pada);
      CompareAndSetPad(13, *padb);
      CompareAndSetPad(14, *padc);
@@ -1016,6 +1024,7 @@ void CheckKnob(int whichKnob){
    }
 
    if (wait==4){
+    CheckKnob(4);
     CheckFader(4);
     CompareAndSetPad(8, *pada);
     CompareAndSetPad(9, *padb);
@@ -1051,6 +1060,7 @@ void CheckKnob(int whichKnob){
    // Switch and wait 20 clock cycles.
    if (wait==8){
      CheckFader(1);
+     CheckKnob(1);
      CheckPitchWheel();
      CompareAndSetPad(0, *pada);
      CompareAndSetPad(1, *padb);
@@ -1066,6 +1076,7 @@ if (wait==9){
 }
 
 if (wait==10){
+  CheckKnob(3);
   CheckFader(3);
   return;
 }
@@ -1077,6 +1088,7 @@ if (wait==11){
 }
 
 if (wait==12){
+  CheckKnob(2);
   CheckFader(2);
   return;
 }
@@ -1087,6 +1099,7 @@ if (wait==13){
 }
 
 if (wait==14){
+  CheckKnob(6);
   CheckFader(6);
   return;
 }
@@ -1097,6 +1110,7 @@ if (wait==15){
 }
 
 if (wait==16){
+  CheckKnob(7);
   CheckFader(7);
   return;
 }
@@ -1404,13 +1418,13 @@ void ConsumeNoteEventStackAndTransmitNotesOverUSB(){
     //left
     if ((e.A)== 500){
       velocity = 65;
-      val = 80;
+      val = 70 + e.C;
       noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
     }
     //right
     if ((e.A)== 501){
       velocity = 1;
-      val = 80;
+      val = 70 + e.C;
       noteChannel = 121 | (0b10110000 << 8); // control message chan 1.
     }
 
