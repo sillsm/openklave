@@ -930,14 +930,16 @@ void CheckFader(int whichFader){
 // Check a given fader
 void CheckKnob(int whichKnob){
   static uint16_t lastModValue[8] = {0,0,0,0,0,0,0,0};
+
   volatile uint16_t * ADCBase = (uint16_t *) 0x20002c96;
-  volatile uint16_t currentVoltage = *(ADCBase +5);
-  volatile uint16_t currentSign= *(ADCBase +4);
+  uint16_t currentVoltage = *(ADCBase +5);
+  uint16_t currentSign= *(ADCBase +4);
 
   volatile uint16_t * DEBUG = (uint16_t *) 0x20002cb6;
+  if (whichKnob == 3){
   *(DEBUG+4)= currentSign;
   *(DEBUG+5)= currentVoltage;
-
+  }
 
   if ((currentSign > 0x780)  && (currentVoltage > 1)) {
     currentVoltage = 0xfb6 + (0xfb6 - currentVoltage);
@@ -946,14 +948,41 @@ void CheckKnob(int whichKnob){
   // This also considerably smooths voltage readings.
   // Go for a bigger range if you want more granularity in the
   // twisting action.
-  currentVoltage = currentVoltage/32;
-  uint16_t currentPitchValue = currentVoltage;
-
+  currentVoltage = currentVoltage;
+  uint16_t currentPitchValue = currentVoltage/32;
+  if (whichKnob == 3){
   *(DEBUG)  = currentPitchValue;
+  }
 
   uint16_t lastValue = lastModValue[whichKnob];
+
+  // Smooth voltage flutter by recording the last seen voltage.
+  //
+  static uint16_t lastRecordedVoltage[8] = {0,0,0,0,0,0,0,0};
+
+  static uint16_t haveIBeenInitialized[8]= {0,0,0,0,0,0,0,0};
+  if (!haveIBeenInitialized[whichKnob]){
+    haveIBeenInitialized[whichKnob] = 1;
+    lastModValue[whichKnob] = currentPitchValue;
+    lastRecordedVoltage[whichKnob] = currentVoltage;
+    return;
+  }
+
+  // if voltage difference is too small we'll call it flutter
+  // and return early.
+  uint16_t voltMax = 0x1F6C;
+  if (((lastRecordedVoltage[whichKnob] ^ currentVoltage) < 0x10)
+  | ((lastRecordedVoltage[whichKnob] ^ currentVoltage) > (voltMax - 0x10) ))
+  {
+    lastRecordedVoltage[whichKnob] = currentVoltage;
+    return;
+  }
+    lastRecordedVoltage[whichKnob] = currentVoltage;
+
   if (currentPitchValue != lastValue){
+    if (whichKnob == 3){
     *(DEBUG+6)= lastModValue[whichKnob];
+    }
      // fire right
      if (((currentPitchValue > lastValue) && ((currentPitchValue - lastValue) < 0x8) )
      | ((currentPitchValue<0x10) && (lastValue>0xf8))) {
@@ -971,6 +1000,8 @@ void CheckKnob(int whichKnob){
      lastModValue[whichKnob]= currentPitchValue;
      return;
    }
+    // generic update
+    lastModValue[whichKnob]= currentPitchValue;
     return;
   }
   return;
@@ -1041,9 +1072,9 @@ void CheckKnob(int whichKnob){
 
    if (wait == 6){
    // Switch and wait 20 clock cycles.
+     CheckKnob(0);
      CheckModWheel();
      CheckFader(0);
-     CheckKnob(0);
      CompareAndSetPad(4, *pada);
      CompareAndSetPad(5, *padb);
      CompareAndSetPad(6, *padc);
