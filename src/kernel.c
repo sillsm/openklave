@@ -944,11 +944,30 @@ void CheckKnob(int whichKnob){
   if ((currentSign > 0x780)  && (currentVoltage > 1)) {
     currentVoltage = 0xfb6 + (0xfb6 - currentVoltage);
   }
+
+  // Smooth voltage flutter by recording the last seen voltage.
+  //
+  // if voltage difference is too small we'll call it flutter
+  // and return early.
+  static uint16_t lastRecordedVoltage[8] = {0,0,0,0,0,0,0,0};
+  uint16_t voltMax = 0x1F6C;
+  uint16_t difference = 0;
+  if (lastRecordedVoltage[whichKnob] >= currentVoltage){
+    difference = lastRecordedVoltage[whichKnob] - currentVoltage;
+  } else {
+    difference = currentVoltage - lastRecordedVoltage[whichKnob];
+  }
+  if ( (difference < 0x10) || (difference > (voltMax - 0x20)) )
+  {
+    lastRecordedVoltage[whichKnob] = currentVoltage;
+    return;
+  }
+    lastRecordedVoltage[whichKnob] = currentVoltage;
+
   // Get a byte value between 0 and 0xFF.
   // This also considerably smooths voltage readings.
   // Go for a bigger range if you want more granularity in the
   // twisting action.
-  currentVoltage = currentVoltage;
   uint16_t currentPitchValue = currentVoltage/32;
   if (whichKnob == 3){
   *(DEBUG)  = currentPitchValue;
@@ -956,9 +975,6 @@ void CheckKnob(int whichKnob){
 
   uint16_t lastValue = lastModValue[whichKnob];
 
-  // Smooth voltage flutter by recording the last seen voltage.
-  //
-  static uint16_t lastRecordedVoltage[8] = {0,0,0,0,0,0,0,0};
 
   static uint16_t haveIBeenInitialized[8]= {0,0,0,0,0,0,0,0};
   if (!haveIBeenInitialized[whichKnob]){
@@ -967,17 +983,6 @@ void CheckKnob(int whichKnob){
     lastRecordedVoltage[whichKnob] = currentVoltage;
     return;
   }
-
-  // if voltage difference is too small we'll call it flutter
-  // and return early.
-  uint16_t voltMax = 0x1F6C;
-  if (((lastRecordedVoltage[whichKnob] ^ currentVoltage) < 0x10)
-  | ((lastRecordedVoltage[whichKnob] ^ currentVoltage) > (voltMax - 0x10) ))
-  {
-    lastRecordedVoltage[whichKnob] = currentVoltage;
-    return;
-  }
-    lastRecordedVoltage[whichKnob] = currentVoltage;
 
   if (currentPitchValue != lastValue){
     if (whichKnob == 3){
@@ -1980,10 +1985,10 @@ extern "C" void TIM2_IRQHandler(){
   static int i = -1;
   i++;
 
-  if (i %2 == 1){
+//  if (i %2 == 1){
     CollectAllKeyboardSignals(); // collect signals every 2 tick interrupt
     // but we don't do the first cycle so we give some time to init.
-  }
+//  }
 
   if (i == 0){
 
