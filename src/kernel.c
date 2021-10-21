@@ -1871,7 +1871,7 @@ void SPISetup(){
 
 // Each Frame of colors to send to SPI will take up a word, just to
 // make alignment prettier. Really, only 0xa bytes are sent.
-static uint32_t RED = 0b001;
+static uint32_t R   = 0b001;
 static uint32_t B   = 0b100;
 static uint32_t G   = 0b010;
 
@@ -1918,13 +1918,20 @@ constexpr Frame MakeFrame (FrameData fd){
 }
 
 void SetupPadColorFrames(){
-    FrameData fd1 = FrameData{{RED,B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
-    struct Frame f1 = MakeFrame(fd1);
-    FrameData fd2 = FrameData{{B,  B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
-    struct Frame f2 = MakeFrame(fd2);
-    FrameData fd3 = FrameData{{B,  B,G,RED|B,RED|G,RED,B,G,RED|B,RED|G,RED,B,G, RED|B, RED|G, RED},0};
-    struct Frame f3 = MakeFrame(fd3);
+    FrameData fd1 = FrameData{{R,R,R,R,R,R,R,R,R|B,B, B,B,G, R|B, B, B},0};
+    FrameData fd2 = FrameData{{B,R,R,R,R,R,0,0,0  ,0, B,B,G, R|B, 0, B|G},0};
+    FrameData fd3 = FrameData{{B,B,R,R,R,R,B,0,0  ,0, B,B,G, R|B, 0, B},0};
+    FrameData fd4 = FrameData{{B,B,B,R,R,R,B,B,0  ,0, B,G,G, R|B, G, B|G},0};
+    FrameData fd5 = FrameData{{B,B,B,B,B,R,B,B,R|B,0, G,G,G, R|B, B, R},0};
+    FrameData fd6 = FrameData{{B,B,B,B,B,B,B,B,B  ,G, G,G,G, R|B, B, 0},0};
 
+
+    struct Frame f1 = MakeFrame(fd1);
+    struct Frame f2 = MakeFrame(fd2);
+    struct Frame f3 = MakeFrame(fd3);
+    struct Frame f4 = MakeFrame(fd4);
+    struct Frame f5 = MakeFrame(fd5);
+    struct Frame f6 = MakeFrame(fd6);
 
     uint32_t * info = (uint32_t *)0x200019d0;
     info[0] = f1.one;
@@ -1940,6 +1947,21 @@ void SetupPadColorFrames(){
     info[0] = f3.one;
     info[1] = f3.two;
     info[2] = 0xffffffff;
+
+    info= (uint32_t *)0x20001a00;
+    info[0] = f4.one;
+    info[1] = f4.two;
+    info[2] = 0xffffffff;
+
+    info= (uint32_t *)0x20001a10;
+    info[0] = f5.one;
+    info[1] = f5.two;
+    info[2] = 0xffffffff;
+
+    info= (uint32_t *)0x20001a20;
+    info[0] = f6.one;
+    info[1] = f6.two;
+    info[2] = 0xffffffff;
 }
 
 
@@ -1954,10 +1976,9 @@ void TIM2Setup(){
   TIM2 -> PSC = 7200-1; // milisecond because STM32f103 is clocked at 72 MHZ
   TIM2 -> CCMR1 = 0x00006800;
   TIM2 -> CCER = 0x10;
-  TIM2 -> ARR  = 5; // every 5 miliseconds
+  TIM2 -> ARR  = 2; // every 5 miliseconds
   TIM2 -> DIER = 1;
-  //TIM3 -> CCR2 = 0x00000155; // This is the contrast value.
-  //TIM3 -> DMAR = 0x00000081;
+
 
 }
 
@@ -1979,6 +2000,9 @@ extern "C" void TIM2_IRQHandler(){
   uint32_t Frame1       = 0x200019d0;
   uint32_t Frame2       = 0x200019e0;
   uint32_t Frame3       = 0x200019f0;
+  uint32_t Frame4       = 0x20001a00;
+  uint32_t Frame5       = 0x20001a10;
+  uint32_t Frame6       = 0x20001a20;
 
 
 
@@ -2016,6 +2040,15 @@ extern "C" void TIM2_IRQHandler(){
        break;
     case 2  :
        *DMA1_5CMAR = Frame3;
+       break;
+    case 3  :
+       *DMA1_5CMAR = Frame4;
+       break;
+    case 4  :
+       *DMA1_5CMAR = Frame5;
+       break;
+    case 5  :
+       *DMA1_5CMAR = Frame6;
        break;
     default :
     j = -1;
@@ -2159,7 +2192,7 @@ int start() {
     // LCD logic
     initDisplay();
     contrast();
-    writeString((char*)"  I <3 Gretchen  ");
+    writeString((char*)"  Open Klave ");
 
     // usb init
     //RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
