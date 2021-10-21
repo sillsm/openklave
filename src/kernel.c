@@ -2009,10 +2009,10 @@ extern "C" void TIM2_IRQHandler(){
   static int i = -1;
   i++;
 
-//  if (i %2 == 1){
+  if (i %2 == 1){
     CollectAllKeyboardSignals(); // collect signals every 2 tick interrupt
     // but we don't do the first cycle so we give some time to init.
-//  }
+  }
 
   if (i == 0){
 
