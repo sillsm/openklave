@@ -63,45 +63,39 @@ def send_sysex_file(filename, midiout, portname, prompt=True, delay=50):
         data = sysex_file.read()
         print("File Length: " + str(len(data)) + " bytes. ")
 
-        if data.startswith(SYSTEM_EXCLUSIVE):
-            try:
-                if prompt:
-                    yn = raw_input("OK?")
-            except (EOFError, KeyboardInterrupt):
-                print('')
-                raise StopIteration
+        try:
+            if prompt:
+                yn = raw_input("OK?")
+        except (EOFError, KeyboardInterrupt):
+            print('')
+            raise StopIteration
 
-            if not prompt or yn.lower() in ('y', 'yes'):
-                sox = 0
-                i = 0
-                chunkSize = 10000
+        if not prompt or yn.lower() in ('y', 'yes'):
+            chunkSize = 10000
+            sysex_msg = data
+            # Python 2: convert data into list of integers
+            if isinstance(sysex_msg, str):
+                print("NOOO")
+                sysex_msg = [ord(c) for c in sysex_msg]
 
-                sox = data.find(SYSTEM_EXCLUSIVE, sox)
-                eox = data.find(END_OF_EXCLUSIVE, sox)
-                sysex_msg = data[sox:eox+1]
-                # Python 2: convert data into list of integers
-                if isinstance(sysex_msg, str):
-                    print("NOOO")
-                    sysex_msg = [ord(c) for c in sysex_msg]
-
-                #Now sysex_msg is an array.
-                start = 0
-                while True:
-                   if len(sysex_msg) <= start + chunkSize:
-                       print("Sending last chunk " + str(i))
-                       midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:])
-                       break
-                   # normal case
-                   #print("Sending chunk " + str(start))
-                   #print("First Char " + str(sysex_msg[start]))
-                   # find an 0A end of ihex piece nearby
-                   stride = start+chunkSize
-                   while sysex_msg[stride] != 0x0a:
-                       stride = stride - 1
-                   #print(type(sysex_msg[start:stride]) )
-                   midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:stride] + bytes(bytearray(0xf7)))
-                   start = stride
-                   time.sleep(.05)
+            #Now sysex_msg is an array.
+            start = 0
+            while True:
+               if len(sysex_msg) <= start + chunkSize:
+                   print("Sending last chunk ")
+                   midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:]+ bytes(bytearray(0xf7)))
+                   break
+               # normal case
+               print("Sending chunk " + str(start))
+               #print("First Char " + str(sysex_msg[start]))
+               # find an 0A end of ihex piece nearby
+               stride = start+chunkSize
+               while sysex_msg[stride] != 0x0a:
+                   stride = stride - 1
+               #print(type(sysex_msg[start:stride]) )
+               midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:stride] + bytes(bytearray(0xf7)))
+               start = stride
+               time.sleep(.05)
 
 
 def main(args=None):
