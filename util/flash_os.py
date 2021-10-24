@@ -44,21 +44,29 @@ log = logging.getLogger("sendsysex")
 SYSTEM_EXCLUSIVE = b'\xF0'
 END_OF_EXCLUSIVE = b'\xF7'
 
+starter = [0xF0, 0x47, 0x00, 0x24, 0x70]
+m = [ 0x3A, 0x30, 0x32, 0x30, 0x30, 0x30, 0x30,
+	0x30, 0x34, 0x30, 0x38, 0x30, 0x30, 0x46, 0x32, 0x0D, 0x0A, 0x3A, 0x31,
+	0x30, 0x36, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x34, 0x30,
+	0x30, 0x32, 0x30, 0x41, 0x42, 0x36, 0x31, 0x30, 0x30, 0x30, 0x38, 0x45,
+	0x46, 0x46, 0x44, 0x30, 0x30, 0x30, 0x38, 0x46, 0x33, 0x45, 0x35, 0x30,
+	0x30, 0x30, 0x38, 0x38, 0x34, 0x0D, 0x0A, 0xf7]
+
 
 def send_sysex_file(filename, midiout, portname, prompt=True, delay=50):
     """Read file given by filename and send all consecutive sysex messages
     found in it to given midiout after prompt.
 
     """
-    bn = basename(filename)
 
     with open(filename, 'rb') as sysex_file:
         data = sysex_file.read()
+        print("File Length: " + str(len(data)) + " bytes. ")
 
         if data.startswith(SYSTEM_EXCLUSIVE):
             try:
                 if prompt:
-                    yn = raw_input("Send '%s' to %s (y/N)? " % (bn, portname))
+                    yn = raw_input("OK?")
             except (EOFError, KeyboardInterrupt):
                 print('')
                 raise StopIteration
@@ -66,30 +74,34 @@ def send_sysex_file(filename, midiout, portname, prompt=True, delay=50):
             if not prompt or yn.lower() in ('y', 'yes'):
                 sox = 0
                 i = 0
+                chunkSize = 20000
 
-                while sox >= 0:
-                    sox = data.find(SYSTEM_EXCLUSIVE, sox)
+                sox = data.find(SYSTEM_EXCLUSIVE, sox)
+                eox = data.find(END_OF_EXCLUSIVE, sox)
+                sysex_msg = data[sox:eox+1]
+                # Python 2: convert data into list of integers
+                if isinstance(sysex_msg, str):
+                    print("NOOO")
+                    sysex_msg = [ord(c) for c in sysex_msg]
 
-                    if sox >= 0:
-                        eox = data.find(END_OF_EXCLUSIVE, sox)
-
-                        if eox >= 0:
-                            sysex_msg = data[sox:eox+1]
-                            # Python 2: convert data into list of integers
-                            if isinstance(sysex_msg, str):
-                                sysex_msg = [ord(c) for c in sysex_msg]
-
-                            log.info("Sending '%s' message #%03i...", bn, i)
-                            midiout.send_message(sysex_msg)
-                            time.sleep(0.001 * delay)
-
-                            i += 1
-                        else:
-                            break
-
-                        sox = eox + 1
-        else:
-            log.warning("File '%s' does not start with a sysex message.", bn)
+                #Now sysex_msg is an array.
+                start = 0
+                while True:
+                   if len(sysex_msg) <= start + chunkSize:
+                       print("Sending last chunk " + str(i))
+                       midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:])
+                       break
+                   # normal case
+                   print("Sending chunk " + str(start))
+                   print("First Char " + str(sysex_msg[start]))
+                   # find an 0A end of ihex piece nearby
+                   stride = start+chunkSize
+                   while sysex_msg[stride] != 0x0a:
+                       stride = stride - 1
+                   print(type(sysex_msg[start:stride]) )
+                   midiout.send_message(bytes(bytearray(starter)) + sysex_msg[start:stride] + bytes(bytearray(0xf7)))
+                   start = stride
+                   time.sleep(1.5)
 
 
 def main(args=None):
